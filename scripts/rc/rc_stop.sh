@@ -55,16 +55,15 @@ process_matches_identity() {
 
 collect_process_tree() {
   local pid="$1"
-  local children child
+  local child
 
   process_start_ticks "${pid}" >/dev/null 2>&1 || return 0
   printf '%s\n' "${pid}"
-  if [[ -r "/proc/${pid}/task/${pid}/children" ]]; then
-    read -r children <"/proc/${pid}/task/${pid}/children" || true
-    for child in ${children:-}; do
-      collect_process_tree "${child}"
-    done
-  fi
+  # Tegra kernels can omit /proc/.../children; pgrep -P uses the same exact PPID relation.
+  while IFS= read -r child; do
+    [[ -n "${child}" ]] || continue
+    collect_process_tree "${child}"
+  done < <(pgrep -P "${pid}" 2>/dev/null || true)
 }
 
 declare -a TRACKED_PIDS=()

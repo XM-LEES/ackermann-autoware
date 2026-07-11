@@ -133,6 +133,8 @@ def test_vehicle_mapping_scripts_exist_and_record_required_topics():
     assert "ROOT_DIR" in stop_text
     assert "component_container" not in stop_text
     assert "rviz2" not in stop_text
+    assert 'pgrep -P "${pid}"' in stop_text
+    assert '/task/${pid}/children' not in stop_text
 
 
 def test_rc_stop_waits_then_kills_the_tracked_process_that_ignores_term(tmp_path):
