@@ -3,7 +3,7 @@
 <package format="3">
   <name>autoracer_sensing</name>
   <version>0.1.0</version>
-  <description>Minimal sensing adapters for Autoracer Hooke.</description>
+  <description>Sensor adapter nodes for Ackermann Autoware platform profiles.</description>
   <maintainer email="autoracer@example.com">Autoracer Team</maintainer>
   <license>Apache-2.0</license>
 

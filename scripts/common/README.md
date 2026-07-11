@@ -13,9 +13,9 @@ Rules:
 Current state:
 
 - `scripts/rc/` is the active runtime operator surface for the RC car.
-- `scripts/hooke/` is a disabled handoff surface until the real Hooke official
+- `scripts/hooke/` is a pending handoff surface until the real Hooke official
   profiles are complete.
 - Existing root helpers such as `scripts/run_official_autoware.sh` and
-  `scripts/ros_env.sh` remain in place for compatibility with the current RC
-  flow. Move logic here only when it is genuinely shared and not hardware
+  `scripts/ros_env.sh` implement shared runtime behavior used by the RC operator
+  surface. Move logic here only when it is genuinely shared and not hardware
   specific.

@@ -50,7 +50,7 @@ def test_autoracer_vehicle_and_sensor_kit_packages_follow_official_names():
     assert "autoracer_bringup" not in read("src/autoracer_rc_sensor_kit_launch/package.xml")
 
 
-def test_hooke_profile_placeholders_are_disabled_until_real_profile_exists():
+def test_hooke_profile_placeholders_are_pending_until_real_profile_exists():
     expected_placeholders = {
         "src/autoracer_hooke_description": [
             "vehicle_info.param.yaml",
@@ -89,7 +89,7 @@ def test_hooke_profile_placeholders_are_disabled_until_real_profile_exists():
             )
         )
         for term in (
-            "disabled_placeholder",
+            "pending",
             "not runtime ready",
             "Remove COLCON_IGNORE only after",
             "autoracer_hooke",
@@ -168,25 +168,25 @@ def test_official_launch_packages_expose_expected_launch_files_and_rc_hardware()
     assert abs(calibration["imu_link"]["pitch"]) > 0.01
 
 
-def test_operator_docs_prefer_official_autoware_launch_command():
+def test_operator_docs_use_wrapper_that_delegates_to_official_autoware_launch():
     readme = read("README.md")
     rc_start = read("scripts/rc/rc_start_autoware.sh")
     run_official = read("scripts/run_official_autoware.sh")
 
-    assert "ros2 launch autoware_launch autoware.launch.xml" in readme
+    assert "./scripts/rc/rc_start_autoware.sh" in readme
+    assert "ros2 launch autoware_launch autoware.launch.xml" not in readme
     assert "vehicle_model:=autoracer_rc" in readme
     assert "sensor_model:=autoracer_rc_sensor_kit" in readme
-    assert "launch_perception:=false" in readme
-    assert "rviz:=false" in readme
-    assert "launch_vehicle_interface:=false" in readme
     assert "run_official_autoware.sh" in rc_start
     assert "ros2 launch autoware_launch autoware.launch.xml" in run_official
     assert "exec ros2 launch autoware_launch autoware.launch.xml" in run_official
     assert "AUTORACER_VEHICLE_MODEL:=autoracer_rc" in run_official
     assert "AUTORACER_SENSOR_MODEL:=autoracer_rc_sensor_kit" in run_official
-    assert "Only the RC official profile is enabled in this branch" in run_official
+    assert "Only the RC official profile is enabled in the current revision" in run_official
     assert "require_active_profile_pair" in run_official
-    assert "disabled_placeholder" in run_official
+    assert "write_runtime_state" in run_official
+    assert "RC_RUNTIME_STATE_FILE" in run_official
+    assert "Hooke is currently pending" in run_official
     assert 'vehicle_model:="${AUTORACER_VEHICLE_MODEL}"' in run_official
     assert 'sensor_model:="${AUTORACER_SENSOR_MODEL}"' in run_official
     assert 'launch_perception:="${LAUNCH_PERCEPTION}"' in run_official
@@ -195,7 +195,7 @@ def test_operator_docs_prefer_official_autoware_launch_command():
     assert "SERIAL_PORT is required when LAUNCH_VEHICLE_INTERFACE=true" in run_official
 
 
-def test_official_wrapper_rejects_disabled_hooke_profile_before_ros_launch():
+def test_official_wrapper_rejects_pending_hooke_profile_before_ros_launch():
     env = os.environ.copy()
     env.update(
         {
@@ -218,9 +218,9 @@ def test_official_wrapper_rejects_disabled_hooke_profile_before_ros_launch():
     )
 
     assert result.returncode == 2
-    assert "Only the RC official profile is enabled in this branch" in result.stderr
+    assert "Only the RC official profile is enabled in the current revision" in result.stderr
     assert "Requested vehicle_model=autoracer_hooke" in result.stderr
-    assert "disabled_placeholder" in result.stderr
+    assert "Hooke is currently pending" in result.stderr
     assert "ros2 launch" not in result.stderr
 
 
@@ -233,8 +233,144 @@ def test_official_wrapper_preflights_complete_map_and_accepts_full_or_tiled_pcd(
     assert "map_projector_info.yaml" in run_official
     assert "-d \"${pointcloud_path}\"" in run_official
     assert "find \"${pointcloud_path}\" -type f -name '*.pcd'" in run_official
-    assert 'MAX_SINGLE_PCD_BYTES:-0' in run_official
+    assert 'MAX_SINGLE_PCD_BYTES:-134217728' in run_official
     assert "max_single_pcd_bytes > 0" in run_official
+
+
+def test_official_wrapper_rejects_single_pcd_over_default_limit(tmp_path):
+    map_dir = tmp_path / "map"
+    map_dir.mkdir()
+    for asset in ["pointcloud_map_metadata.yaml", "lanelet2_map.osm", "map_projector_info.yaml"]:
+        (map_dir / asset).write_text("placeholder\n")
+    with (map_dir / "pointcloud_map.pcd").open("wb") as stream:
+        stream.truncate(134217729)
+
+    runtime_dir = tmp_path / "runtime"
+    env = os.environ.copy()
+    env.pop("MAX_SINGLE_PCD_BYTES", None)
+    env.update(
+        {
+            "MAP_PATH": str(map_dir),
+            "LAUNCH_SENSING": "false",
+            "LAUNCH_VEHICLE_INTERFACE": "false",
+            "LAUNCH_RVIZ": "false",
+            "RC_RUNTIME_DIR": str(runtime_dir),
+        }
+    )
+    result = subprocess.run(
+        ["bash", "scripts/run_official_autoware.sh"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "single-file pointcloud map is too large" in result.stderr
+    assert not runtime_dir.exists()
+
+
+def test_autonomous_request_uses_official_adapi_and_waits_for_final_state():
+    script = read("scripts/request_autonomous_mode.sh")
+
+    assert 'ROS2_CLI="${ROS2_CLI:-ros2}"' in script
+    assert "/api/operation_mode/enable_autoware_control" in script
+    assert "/api/operation_mode/change_to_autonomous" in script
+    assert "/api/operation_mode/state" in script
+    assert "wait_for_operation_state" in script
+    assert "is_autoware_control_enabled" in script
+    assert "is_in_transition" in script
+    assert "/control/control_mode_request" not in script
+
+
+def _write_fake_ros2(path: Path, service_success: bool) -> None:
+    success = "True" if service_success else "False"
+    path.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        'printf \'%s\\n\' "$*" >>"${ROS2_CALL_LOG}"\n'
+        'if [[ "$1 $2" == "service call" ]]; then\n'
+        f'  echo "Response(status=ResponseStatus(success={success}, code=0, message=\'\'))"\n'
+        "  exit 0\n"
+        "fi\n"
+        'if [[ "$1 $2" == "topic echo" ]]; then\n'
+        "  echo 'mode: 2'\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 2\n"
+    )
+    path.chmod(0o755)
+
+
+def test_autonomous_request_calls_official_services_in_order(tmp_path):
+    fake_ros2 = tmp_path / "ros2"
+    call_log = tmp_path / "calls.log"
+    _write_fake_ros2(fake_ros2, service_success=True)
+    env = os.environ.copy()
+    env.update(
+        {
+            "AUTORACER_SOURCE_LOCAL_SETUP": "false",
+            "ROS2_CLI": str(fake_ros2),
+            "ROS2_CALL_LOG": str(call_log),
+            "SERVICE_TIMEOUT_SEC": "2",
+            "AUTONOMOUS_MODE_TIMEOUT_SEC": "2",
+        }
+    )
+
+    result = subprocess.run(
+        ["bash", "scripts/request_autonomous_mode.sh"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=8,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    calls = call_log.read_text().splitlines()
+    assert calls[0].startswith(
+        "service call /api/operation_mode/enable_autoware_control "
+    )
+    assert calls[1].startswith("topic echo ")
+    assert "m.is_autoware_control_enabled and not m.is_in_transition" in calls[1]
+    assert calls[2].startswith("service call /api/operation_mode/change_to_autonomous ")
+    assert calls[3].startswith("topic echo ")
+    assert "/api/operation_mode/state" in calls[3]
+    assert "m.mode == 2" in calls[3]
+
+
+def test_autonomous_request_stops_when_official_api_rejects_control(tmp_path):
+    fake_ros2 = tmp_path / "ros2"
+    call_log = tmp_path / "calls.log"
+    _write_fake_ros2(fake_ros2, service_success=False)
+    env = os.environ.copy()
+    env.update(
+        {
+            "AUTORACER_SOURCE_LOCAL_SETUP": "false",
+            "ROS2_CLI": str(fake_ros2),
+            "ROS2_CALL_LOG": str(call_log),
+            "SERVICE_TIMEOUT_SEC": "2",
+        }
+    )
+
+    result = subprocess.run(
+        ["bash", "scripts/request_autonomous_mode.sh"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=8,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "rejected the request" in result.stderr
+    calls = call_log.read_text().splitlines()
+    assert len(calls) == 1
+    assert "/api/operation_mode/enable_autoware_control" in calls[0]
 
 
 def test_official_wrapper_supplies_orin_display_for_ssh_started_rviz():
@@ -366,7 +502,6 @@ def test_official_localization_contract_uses_upstream_default_pointcloud_topic()
     assert "rmw_cyclonedds_cpp" in ros_env
     assert "AUTORACER_DEFAULT_RMW" in ros_env
     assert "official localization 默认消费 `/sensing/lidar/concatenated/pointcloud`" in docs
-    assert "runtime localization consumes the official default concatenated topic" in docs
 
 
 def test_official_localization_docs_require_full_map_directory():

@@ -13,6 +13,9 @@ localization-only、full-chain dry-run、drive-enabled 三种模式前都先执�
 `./scripts/rc/rc_stop.sh`，不要把 localization-only 和 full-chain 连续叠加启动。
 `/initialpose` 是 RViz 操作入口；`/initialpose3d` 是 official localization 内部入口。
 脚本默认保留官方 API/RViz adaptor，让 localization-only 和 full-chain 的初始定位操作一致。
+正式启动脚本把顶层 launch 的 PID、启动标识和仓库路径写入
+`/tmp/autoracer_rc/autoware.env`；`rc_stop.sh` 只停止该状态文件登记的进程树，
+不会扫描或终止同一用户的其他 ROS/RViz 进程。
 
 ### 0.1 公共变量
 
@@ -25,6 +28,7 @@ export MAP_PATH="$PWD/maps/$MAP_NAME"
 export IMU_SERIAL_PORT=/dev/ttyUSB0
 export SERIAL_PORT=/dev/ttyCH343USB0
 export LAUNCH_RVIZ=true
+export LAUNCH_PERCEPTION=false
 
 test -f "$MAP_PATH/pointcloud_map.pcd" || test -d "$MAP_PATH/pointcloud_map.pcd"
 test -f "$MAP_PATH/pointcloud_map_metadata.yaml"
@@ -116,6 +120,10 @@ ros2 topic list | rg '/planning/trajectory|/control/command/control_cmd|/autorac
 
 确认初始位姿、短 route/goal、trajectory、control、safe control 都正常后收尾：
 
+RC full-chain 的 Perception 当前关闭。Planning module 启动只证明 route、trajectory
+和 control 链可运行，不能声明动态障碍物感知或完整避障能力；第一轮动态验证必须使用
+已确认无障碍的短路线。
+
 ```bash
 cd ~/Desktop/autoracer_hooke
 ./scripts/rc/rc_stop.sh
@@ -137,13 +145,18 @@ MAX_SPEED_MPS=0.5 \
 ./scripts/rc/rc_start_autoware.sh
 ```
 
-另开终端请求 autonomous mode：
+另开终端启用 Autoware control 并请求 autonomous mode：
 
 ```bash
 cd ~/Desktop/autoracer_hooke
-source scripts/ros_env.sh
 ./scripts/request_autonomous_mode.sh
 ```
+
+该脚本先调用 `/api/operation_mode/enable_autoware_control`，等待 control transition
+结束后再调用 `/api/operation_mode/change_to_autonomous`。只有
+`/api/operation_mode/state` 确认 control 已启用、mode 为 Autonomous 且 transition
+结束时才返回成功；定位、route、planning 或 control 条件不满足时会失败，不会绕过
+official operation-mode manager 直接切换底盘层模式。
 
 停车收尾：
 
@@ -162,12 +175,13 @@ source scripts/ros_env.sh
 ros2 launch foxglove_bridge foxglove_bridge_launch.xml
 ```
 
-客户端连接 `ws://192.168.1.135:8765/`。结束时在该终端按 `Ctrl-C`；
+客户端连接 `ws://<orin-host>:8765/`，其中 `<orin-host>` 是当前车辆主机名或地址。
+结束时在该终端按 `Ctrl-C`；
 `./scripts/rc/rc_stop.sh` 不停止独立运行的 Foxglove Bridge。
 
 ## 1. 主机与网络
 
-- 车端仓库必须和当前开发基线在同一 commit；当前基线分支是 `feature/official-autoware-launch`。
+- 车端仓库必须和当前协作基线在同一 commit；启动前记录并核对 `git rev-parse HEAD`。
 - 车端已构建或至少能 source workspace。
 - 车端 DDS 内核参数和 official system monitor 特权网络读取服务已配置：
 
@@ -192,11 +206,8 @@ sudo -E ./scripts/rc/rc_configure_lidar.sh
 
 ## 2. 传感器与 TF
 
-启动 mapping/定位所需传感器：
-
-```bash
-IMU_SERIAL_PORT=/dev/ttyUSB0 ./scripts/rc/rc_start_sensors.sh
-```
+传感器启动和停止命令以 [0.2 传感器检查](#02-传感器检查) 为准。本节只定义验收项，
+不维护第二份启动命令。
 
 检查输入：
 
@@ -211,7 +222,7 @@ IMU_SERIAL_PORT=/dev/ttyUSB0 ./scripts/rc/rc_start_sensors.sh
 - 点云 frame 为 `lidar_top`。
 - Hipnuc IMU 输出 `/sensing/imu/imu_data_raw` 和 `/sensing/imu/imu_data`。
 - `base_link -> lidar_top` 和 `base_link -> imu_link` 可查。
-- RC LiDAR/IMU 使用 sensor profile 中的 2026-07-10 静止标定值；传感器物理位置变化后必须重新标定。
+- RC LiDAR/IMU 使用 sensor profile 中的当前标定值；传感器物理位置变化后必须重新标定。
 
 ## 3. 底盘反馈
 
@@ -241,18 +252,15 @@ map_projector_info.yaml
 official localization-only 也需要完整地图目录；缺少 Lanelet2 或 projector 资产时先补齐地图，不声明车端 localization 已可验证。
 
 超过 128 MiB 的单个 PCD 会被启动脚本拒绝。正式运行地图应通过
-`tools/mapping/prepare_autoware_pointcloud_map.sh` 降采样和分块，metadata 由官方
-divider 生成，不手写。
+`tools/mapping/prepare_autoware_pointcloud_map.sh` 完成质量检查和分块，metadata 由
+official divider 生成，不手写。默认 `LEAF_SIZE=-0.1`，不额外降采样；只有性能证据
+支持时才设置正数体素尺寸。`MAX_SINGLE_PCD_BYTES=0` 只用于显式诊断，不作为正式地图
+启动默认值。
 
 ## 5. Localization
 
-启动 localization-only：
-
-```bash
-MAP_PATH=~/Desktop/autoracer_hooke/maps/<map_name> \
-IMU_SERIAL_PORT=/dev/ttyUSB0 \
-./scripts/rc/rc_start_localization.sh
-```
+Localization-only 启动命令以 [0.3 定位单链路](#03-定位单链路) 为准。本节只定义
+定位验收和失败边界。
 
 验收项：
 
@@ -270,12 +278,13 @@ NDT 收敛。
 
 ## 6. Planning
 
-- 当前分支默认由 `autoware_launch` 启动官方 planning。
+- 当前配置默认由 `autoware_launch` 启动 official planning。
 - 输入完整官方地图目录、localization 状态和 RViz/Autoware route/goal 操作。
 - 输出 `/planning/trajectory`。
+- `LAUNCH_PERCEPTION=false`，依赖 objects、obstacle pointcloud 或 traffic-light 的能力没有完整输入。
 - 第一轮只用简单短路线。
 
-自研 planning/control 候选不作为本分支默认入口；如果要评估，必须作为单独替换任务显式接入同一 topic/message/frame 合约。
+自研 planning/control 候选不进入默认运行链；如果要评估，必须作为单独替换任务显式接入同一 topic/message/frame 合约。
 
 ## 7. Control/Gate/Adapter
 
@@ -287,26 +296,13 @@ NDT 收敛。
 - 当前 Orin RC 车的 STM32 下位机 USB-UART 是 `/dev/ttyCH343USB0`。
 - 第一轮实车建议 `MAX_SPEED_MPS=0.5~0.8`。
 
-完整启动：
+完整链路、低速使能和停止命令分别以
+[0.4 完整链路](#04-完整链路不放行底盘)、[0.5 低速放行底盘](#05-低速放行底盘)
+及对应收尾步骤为准。本节只定义 Control/Gate/Adapter 的接口验收。
 
-```bash
-MAP_PATH=~/Desktop/autoracer_hooke/maps/<map_name> ./scripts/rc/rc_start_autoware.sh
-```
-
-低速使能前必须完成标定检查：
-
-```bash
-MAP_PATH=~/Desktop/autoracer_hooke/maps/<map_name> SERIAL_PORT=/dev/ttyCH343USB0 ENABLE_DRIVE_COMMANDS=true ./scripts/rc/rc_start_autoware.sh
-./scripts/request_autonomous_mode.sh
-```
-
-停止 RC Autoware 相关节点：
-
-```bash
-./scripts/rc/rc_stop.sh
-```
-
-不要用 `timeout -s INT` 作为 full-chain dry-run 的正式停止方式。它会直接向官方 launch 发送 SIGINT，可能在 composable node 卸载时触发上游 planning container shutdown 崩溃；现场和验证脚本都应让链路正常运行，再用 `rc_stop.sh` 做受控清理。
+现场和验证流程统一使用 `rc_stop.sh` 收尾。它先向登记的顶层 launch 发送 SIGINT 并等待
+官方链路退出，超时后才按登记的进程身份升级为 SIGTERM/SIGKILL；不要用进程名扫描或
+任意 `pkill` 代替正式停止入口。
 
 ## 8. 低速动态验证顺序
 

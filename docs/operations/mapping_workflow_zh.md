@@ -23,8 +23,8 @@ autoracer_hooke/tools/mapping/
 工作区和数据不属于源码：
 
 ```text
-/home/milesli/Desktop/RC/rc_mapping_ws/       # 可重新构建的 x86 colcon 工作区
-/home/milesli/Desktop/RC/rc_mapping_data/
+<repo-parent>/rc_mapping_ws/                   # 可重新构建的 x86 colcon 工作区
+<repo-parent>/rc_mapping_data/
   bags/raw/<bag_id>/                           # 原始数据，长期保留
   runs/<run_id>/                               # 可重建的 Super-LIO 输出
   autoware_maps/<map_name>/                    # 待标注或可发布地图
@@ -93,6 +93,9 @@ IMU_SERIAL_PORT=/dev/ttyUSB0 \
 
 录包链路不会启动 localization、planning、control 或 vehicle interface，且
 `ENABLE_DRIVE_COMMANDS=false`。
+启动脚本在 `/tmp/autoracer_rc/mapping_bag.env` 记录 recorder 和 sensor process group
+的 PID、启动标识、PGID、用户和仓库路径；停止脚本只有在这些身份全部匹配时才发送
+信号，陈旧状态文件不会用于终止其他进程。
 
 正式 bag 包含：
 
@@ -115,15 +118,16 @@ Super-LIO 优先使用保留逐点时间的 raw 点云。检查工具只对旧 b
 在 x86 仓库根目录执行：
 
 ```bash
-VEHICLE_HOST=wheeltec@192.168.1.135 \
-VEHICLE_BAG=/home/wheeltec/autoracer_mapping_bags/floor1_mapping_001 \
+export MAPPING_DATA_DIR="$(dirname "$PWD")/rc_mapping_data"
+VEHICLE_HOST='wheeltec@<orin-host>' \
+VEHICLE_BAG=~/autoracer_mapping_bags/floor1_mapping_001 \
 ./scripts/pull_mapping_bag.sh
 ```
 
 默认保存到：
 
 ```text
-/home/milesli/Desktop/RC/rc_mapping_data/bags/raw/floor1_mapping_001/
+${MAPPING_DATA_DIR}/bags/raw/floor1_mapping_001/
 ```
 
 ## 可选实时检查
@@ -151,12 +155,18 @@ ws://<orin-ip>:8765/
 
 ## 工作机离线建图
 
-以下命令在 x86 仓库根目录执行。
+以下命令在 x86 仓库根目录执行。先统一工作目录变量；mapping helper 的默认值也是
+仓库同级目录，显式设置便于日志和人工命令保持一致：
+
+```bash
+export REPO_ROOT="$PWD"
+export MAPPING_WS="$(dirname "$REPO_ROOT")/rc_mapping_ws"
+export MAPPING_DATA_DIR="$(dirname "$REPO_ROOT")/rc_mapping_data"
+```
 
 ### 1. 准备工具工作区
 
 ```bash
-cd /home/milesli/Desktop/RC/autoracer_hooke
 ./tools/mapping/bootstrap_mapping_ws.sh
 ```
 
@@ -167,7 +177,7 @@ cd /home/milesli/Desktop/RC/autoracer_hooke
 
 ```bash
 ./tools/mapping/inspect_bag_topics.sh \
-  /home/milesli/Desktop/RC/rc_mapping_data/bags/raw/floor1_mapping_001
+  "$MAPPING_DATA_DIR/bags/raw/floor1_mapping_001"
 ```
 
 检查必须通过字段类型、整帧逐点时间范围、IMU 和静态 TF。Foxglove 用于人工确认
@@ -178,7 +188,7 @@ cd /home/milesli/Desktop/RC/autoracer_hooke
 ```bash
 PLAYBACK_RATE=1.0 \
 ./tools/mapping/run_super_lio_offline.sh \
-  /home/milesli/Desktop/RC/rc_mapping_data/bags/raw/floor1_mapping_001 \
+  "$MAPPING_DATA_DIR/bags/raw/floor1_mapping_001" \
   floor1_mapping_001
 ```
 
@@ -206,7 +216,7 @@ Super-LIO 脚本会自动运行平路地图质量门禁并生成
 
 ```bash
 ./tools/mapping/audit_pointcloud_map.py \
-  /home/milesli/Desktop/RC/rc_mapping_data/runs/floor1_mapping_001/map/map.pcd \
+  "$MAPPING_DATA_DIR/runs/floor1_mapping_001/map/map.pcd" \
   --output /tmp/floor1_mapping_001_quality.json
 ```
 
@@ -278,7 +288,8 @@ map_projector_info.yaml
 同步脚本会在上传前检查四项地图资产：
 
 ```bash
-VEHICLE_HOST=wheeltec@192.168.1.135 \
+MAPPING_DATA_DIR="$MAPPING_DATA_DIR" \
+VEHICLE_HOST='wheeltec@<orin-host>' \
 ./tools/mapping/sync_map_to_vehicle.sh floor1_mapping_001
 ```
 
@@ -287,7 +298,7 @@ VEHICLE_HOST=wheeltec@192.168.1.135 \
 车端路径：
 
 ```text
-/home/wheeltec/Desktop/autoracer_hooke/maps/floor1_mapping_001
+~/Desktop/autoracer_hooke/maps/floor1_mapping_001
 ```
 
 同步后按 `docs/operations/rc_runbook_zh.md` 先做 localization-only 验证，再启动完整

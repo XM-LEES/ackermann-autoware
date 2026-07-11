@@ -22,25 +22,39 @@ while shared interfaces are being changed. The status table is the coordination
 surface for that state; it describes current integration readiness without
 changing the long-term target list.
 
-Current branch status:
+Current revision status:
 
 - RC: active runtime profile and primary development path.
-- Hooke: profile integration pending; on-car validation is not available in the
-  current development environment.
+- Hooke: profile integration pending; no runtime-ready profile is exposed.
 
-The active runtime path is the official Autoware launch path:
+Top-level composition uses the official Autoware launch path.
+Official profile composition example:
 
-```bash
-ros2 launch autoware_launch autoware.launch.xml \
-  vehicle_model:=autoracer_rc \
-  sensor_model:=autoracer_rc_sensor_kit \
-  launch_vehicle_interface:=false \
-  launch_perception:=false \
-  rviz:=false
+```text
+vehicle_model:=autoracer_rc
+sensor_model:=autoracer_rc_sensor_kit
 ```
 
 The RC operator wrappers under `scripts/rc/` call the same official launch path
 and add field checks, runtime defaults, and controlled shutdown.
+
+On-car runtime entrypoint commands are maintained under [RC
+Startup](#rc-startup) and in the RC runbook.
+
+## Runtime Architecture
+
+```text
+Map -> Localization -> Planning -> Control
+Sensing -> Localization
+Sensing -> Perception (available_disabled) -> Planning
+Control -> VehicleCmdGate -> Project Safety Gate -> Vehicle Adapter -> Chassis
+/vehicle/status/* -> Localization / Control
+```
+
+RC currently launches Map, Sensing, Localization, Planning, Control, Vehicle,
+AD API, and System/Diagnostics. Perception retains the official integration
+boundary but is disabled by default. The canonical data flow and module
+responsibilities are in `docs/architecture_zh.md`.
 
 ## Repository Layout
 
@@ -60,14 +74,14 @@ tools/system/               Reproducible onboard host-service provisioning.
 src/external/autoware       Pinned upstream Autoware packages; keep patches explicit.
 src/autoracer_rc_*          RC vehicle and sensor-kit profiles.
 src/autoracer_hooke_*       Hooke vehicle and sensor-kit profile placeholders.
-src/autoracer_description   Shared frames, URDF helpers, and static TF assets.
+src/autoracer_description   Legacy/reference description and static TF assets.
 src/autoracer_sensing       Small sensor adapters used by platform profiles.
 src/autoracer_safety        Final command gate before chassis adapters.
 src/autoracer_vehicle_interface
                              Chassis adapters and vehicle status bridges.
-src/autoracer_localization  Localization adapters that preserve official topic contracts.
-src/autoracer_planning      Local algorithm packages; not hidden default launch glue.
-src/autoracer_control       Local controller packages; not hidden default launch glue.
+src/autoracer_localization  Candidate localization helpers; not in the default runtime.
+src/autoracer_planning      Candidate planning algorithms; not in the default runtime.
+src/autoracer_control       Candidate control algorithms; not in the default runtime.
 src/hardware_drivers        Vendored SocketCAN driver material used by Hooke integration.
 src/hooke2_vehicle          Vendored Hooke vehicle reference material.
 src/wd_msgs                 Vendored Hooke chassis messages and byte helpers.
@@ -75,14 +89,14 @@ src/wd_msgs                 Vendored Hooke chassis messages and byte helpers.
 
 ## Documentation
 
-```text
-docs/development_guide_zh.md                     Platform development contract.
-docs/architecture_zh.md                          Runtime system architecture and data flow.
-docs/architecture/rc_official_runtime_graph.html Direct-open nodeviewer-style RC runtime graph.
-docs/operations/rc_runbook_zh.md                 RC on-car startup and validation flow.
-docs/operations/mapping_workflow_zh.md           Mapping and bag workflow.
-docs/reference/interfaces_and_calibration_zh.md  Topic, frame, adapter, and calibration facts.
-```
+| Document | Scope |
+| --- | --- |
+| [Platform development contract](docs/development_guide_zh.md) | Profile, package, adapter, algorithm, and upstream maintenance rules. |
+| [System architecture](docs/architecture_zh.md) | Runtime modules, data flow, and platform boundaries. |
+| [Interactive architecture browser](docs/architecture/project_architecture.html) | Direct-open offline visual projection of the system architecture. |
+| [RC runbook](docs/operations/rc_runbook_zh.md) | On-car startup, shutdown, and validation flow. |
+| [Mapping workflow](docs/operations/mapping_workflow_zh.md) | Bag capture, Super-LIO, map packaging, and synchronization. |
+| [Interfaces and calibration](docs/reference/interfaces_and_calibration_zh.md) | Topic, frame, adapter, hardware, and calibration facts. |
 
 Documentation responsibilities:
 
@@ -96,15 +110,24 @@ Documentation responsibilities:
 
 ## Build
 
+The build scripts assume Ubuntu 22.04 with ROS 2 Humble installed at
+`/opt/ros/humble`. Install the repository tooling before importing sources:
+
 ```bash
-cd <repo>
-./scripts/import_dependencies.sh
-./scripts/install_rosdeps.sh
-./scripts/build_minimal.sh
-source ./scripts/ros_env.sh
+sudo apt install -y \
+  python3-vcstool \
+  python3-rosdep \
+  python3-colcon-common-extensions \
+  ros-humble-rmw-cyclonedds-cpp
 ```
 
-Desktop/RViz plugin dependencies on a fresh Ubuntu 22.04 + ROS Humble host:
+Initialize rosdep once on a fresh host:
+
+```bash
+test -r /etc/ros/rosdep/sources.list.d/20-default.list || sudo rosdep init
+```
+
+Desktop/RViz plugin dependencies on a fresh ROS 2 Humble host:
 
 ```bash
 sudo apt install -y \
@@ -122,11 +145,26 @@ sudo apt install -y \
   libpcap-dev
 ```
 
+The selected upstream source snapshots are tracked under `src/external`; a
+normal checkout must not run `vcs import` into that directory. Resolve system
+dependencies and build the active runtime workspace:
+
+```bash
+cd <repo>
+./scripts/install_rosdeps.sh
+./scripts/build_minimal.sh
+source ./scripts/ros_env.sh
+```
+
 On resource-constrained onboard compute:
 
 ```bash
 COLCON_PARALLEL_WORKERS=1 MAKEFLAGS="-j2 -l2" ./scripts/build_minimal.sh
 ```
+
+Candidate local algorithms and platform-reference packages are excluded by
+default. Maintainers can compile them explicitly with `BUILD_CANDIDATES=true`
+or `BUILD_REFERENCES=true`; neither option changes the active runtime graph.
 
 After the onboard workspace is built, apply the Autoware DDS kernel settings,
 CycloneDDS prerequisites, and privileged system-monitor reader:
@@ -172,23 +210,19 @@ ENABLE_DRIVE_COMMANDS=false \
 ./scripts/rc/rc_start_autoware.sh
 ```
 
-Low-speed drive-enabled startup is allowed only after TF, localization, steering
-direction, velocity sign, stop behavior, and takeover behavior are verified:
+Drive-enabled startup and autonomous-mode engagement are safety-critical field
+operations. Follow the ordered checks and copy-paste commands in the RC runbook
+instead of enabling drive from this overview.
 
-```bash
-MAP_PATH=/path/to/autoware_map \
-SERIAL_PORT=/dev/ttyCH343USB0 \
-ENABLE_DRIVE_COMMANDS=true \
-./scripts/rc/rc_start_autoware.sh
-
-./scripts/request_autonomous_mode.sh
-```
-
-Stop RC Autoware processes:
+Stop the runtime started by the formal RC wrappers:
 
 ```bash
 ./scripts/rc/rc_stop.sh
 ```
+
+The stop command uses the runtime identity recorded under
+`/tmp/autoracer_rc`; it does not scan for generic ROS process names and does not
+stop an independently launched Foxglove Bridge.
 
 ## Safety Default
 

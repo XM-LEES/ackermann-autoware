@@ -13,12 +13,8 @@ if [[ -n "${COLCON_PARALLEL_WORKERS:-}" ]]; then
   COLCON_WORKER_ARGS+=(--parallel-workers "$COLCON_PARALLEL_WORKERS")
 fi
 
-PACKAGES=(
-  autoracer_description
-  autoracer_localization
+ACTIVE_RUNTIME_PACKAGES=(
   autoracer_sensing
-  autoracer_planning
-  autoracer_control
   autoracer_safety
   autoracer_vehicle_interface
   autoracer_rc_description
@@ -70,9 +66,6 @@ PACKAGES=(
   autoware_map_loader
   autoware_ndt_scan_matcher
   autoware_gnss_poser
-  nebula_msgs
-  nebula_hesai
-  nebula_hesai_decoders
   autoware_localization_rviz_plugin
   autoware_planning_rviz_plugin
   autoware_perception_rviz_plugin
@@ -104,6 +97,23 @@ PACKAGES=(
   autoware_motion_velocity_run_out_module
   autoware_motion_velocity_boundary_departure_prevention_module
   autoware_motion_velocity_road_user_stop_module
+)
+
+# These packages are buildable extension points, but official planning/control
+# remains the default runtime until a candidate is explicitly wired and tested.
+CANDIDATE_PACKAGES=(
+  autoracer_localization
+  autoracer_planning
+  autoracer_control
+)
+
+# Reference packages are kept buildable for platform integration work. They are
+# not selected by the current RC profile and must not be treated as active nodes.
+REFERENCE_PACKAGES=(
+  autoracer_description
+  nebula_msgs
+  nebula_hesai
+  nebula_hesai_decoders
   fixposition_driver_msgs
   fixposition_driver_lib
   rtcm_msgs
@@ -111,6 +121,16 @@ PACKAGES=(
   fpsdk_ros2
   fixposition_driver_ros2
 )
+
+PACKAGES=("${ACTIVE_RUNTIME_PACKAGES[@]}")
+
+if [[ "${BUILD_CANDIDATES:-false}" == "true" ]]; then
+  PACKAGES+=("${CANDIDATE_PACKAGES[@]}")
+fi
+
+if [[ "${BUILD_REFERENCES:-false}" == "true" ]]; then
+  PACKAGES+=("${REFERENCE_PACKAGES[@]}")
+fi
 
 OVERRIDE_PACKAGES=(
   autoware_adapi_v1_msgs

@@ -14,7 +14,7 @@ setup(
     zip_safe=True,
     maintainer="Autoracer Team",
     maintainer_email="autoracer@example.com",
-    description="Minimal sensing adapters for Autoracer Hooke.",
+    description="Sensor adapter nodes for Ackermann Autoware platform profiles.",
     license="Apache-2.0",
     entry_points={
         "console_scripts": [

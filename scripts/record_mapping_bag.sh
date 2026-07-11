@@ -57,7 +57,6 @@ if [[ "${INCLUDE_MAPPING_DIAGNOSTICS}" == "true" ]]; then
     /vehicle/status/steering_status
     /vehicle/status/gear_status
     /autoracer/vehicle_interface/state
-    /scan_raw
   )
 fi
 

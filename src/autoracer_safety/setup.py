@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer="Autoracer Team",
     maintainer_email="autoracer@example.com",
-    description="Final command gate and limits before Hooke2 vehicle output.",
+    description="Platform-independent final safety gate before chassis adapters.",
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
@@ -23,4 +23,3 @@ setup(
         ],
     },
 )
-

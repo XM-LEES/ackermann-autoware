@@ -3,7 +3,7 @@
 <package format="3">
   <name>autoracer_localization</name>
   <version>0.1.0</version>
-  <description>Small localization helpers for Autoracer Hooke.</description>
+  <description>Candidate localization helpers for Ackermann Autoware platforms.</description>
   <maintainer email="autoracer@example.com">Autoracer Team</maintainer>
   <license>Apache-2.0</license>
 

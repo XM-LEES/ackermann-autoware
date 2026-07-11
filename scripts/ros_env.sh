@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Source this file from repository scripts to avoid inheriting the old pilot-auto.x1 underlay.
+# Source this file from repository scripts to load ROS and this workspace.
 
 _autoracer_filter_path_var() {
   local var_name="$1"
@@ -25,8 +25,10 @@ _autoracer_filter_path_var() {
   export "${var_name}=${filtered}"
 }
 
-_autoracer_filter_old_repo_paths() {
-  local old_repo="${AUTORACER_OLD_REPO:-/home/corage/workspace/project/pilot-auto.x1}"
+_autoracer_filter_blocked_underlay_paths() {
+  local blocked_underlay="${AUTORACER_BLOCKED_UNDERLAY:-}"
+  [[ -z "${blocked_underlay}" ]] && return 0
+
   local var_name
   for var_name in \
     AMENT_PREFIX_PATH \
@@ -38,8 +40,40 @@ _autoracer_filter_old_repo_paths() {
     PYTHONPATH \
     PATH
   do
-    _autoracer_filter_path_var "${var_name}" "${old_repo}"
+    _autoracer_filter_path_var "${var_name}" "${blocked_underlay}"
   done
+}
+
+_autoracer_reset_inherited_underlays() {
+  if [[ "${AUTORACER_ALLOW_EXTERNAL_UNDERLAY:-false}" == "true" ]]; then
+    _autoracer_filter_blocked_underlay_paths
+    return 0
+  fi
+
+  local -a underlay_prefixes=("${ROOT_DIR}/install")
+  local var_name value entry prefix
+  for var_name in AMENT_PREFIX_PATH COLCON_PREFIX_PATH; do
+    value="${!var_name:-}"
+    while IFS= read -r -d ':' entry; do
+      [[ -z "${entry}" || "${entry}" == /opt/ros/* ]] && continue
+      underlay_prefixes+=("${entry}")
+    done < <(printf '%s:' "${value}")
+  done
+
+  for prefix in "${underlay_prefixes[@]}"; do
+    for var_name in \
+      LD_LIBRARY_PATH \
+      LIBRARY_PATH \
+      PKG_CONFIG_PATH \
+      PYTHONPATH \
+      PATH
+    do
+      _autoracer_filter_path_var "${var_name}" "${prefix}"
+    done
+  done
+
+  unset AMENT_PREFIX_PATH CMAKE_PREFIX_PATH COLCON_PREFIX_PATH
+  _autoracer_filter_blocked_underlay_paths
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
@@ -57,7 +91,7 @@ if [[ ! -f "${ROS_SETUP}" ]]; then
 fi
 
 unset AMENT_CURRENT_PREFIX COLCON_CURRENT_PREFIX
-_autoracer_filter_old_repo_paths
+_autoracer_reset_inherited_underlays
 
 _autoracer_had_nounset=0
 case $- in
@@ -70,7 +104,7 @@ source "${ROS_SETUP}"
 if [[ "${_autoracer_had_nounset}" == "1" ]]; then
   set -u
 fi
-_autoracer_filter_old_repo_paths
+_autoracer_filter_blocked_underlay_paths
 
 if [[ "${AUTORACER_SOURCE_LOCAL_SETUP:-true}" == "true" ]]; then
   if [[ -f "${ROOT_DIR}/install/local_setup.bash" ]]; then
@@ -80,7 +114,7 @@ if [[ "${AUTORACER_SOURCE_LOCAL_SETUP:-true}" == "true" ]]; then
     if [[ "${_autoracer_had_nounset}" == "1" ]]; then
       set -u
     fi
-    _autoracer_filter_old_repo_paths
+    _autoracer_filter_blocked_underlay_paths
   else
     echo "[autoracer-env] ${ROOT_DIR}/install/local_setup.bash not found; build first." >&2
     return 1
@@ -106,14 +140,4 @@ if [[ "${RMW_IMPLEMENTATION:-}" == "rmw_cyclonedds_cpp" && -z "${CYCLONEDDS_URI:
     echo "[autoracer-env] Missing CycloneDDS config: ${AUTORACER_CYCLONEDDS_CONFIG}" >&2
     return 1
   fi
-fi
-
-if [[ "${AUTORACER_FORBID_OLD_UNDERLAY:-true}" == "true" ]]; then
-  old_repo="${AUTORACER_OLD_REPO:-/home/corage/workspace/project/pilot-auto.x1}"
-  for var_name in AMENT_PREFIX_PATH CMAKE_PREFIX_PATH COLCON_PREFIX_PATH LD_LIBRARY_PATH PYTHONPATH; do
-    if [[ ":${!var_name:-}:" == *":${old_repo}"* ]]; then
-      echo "[autoracer-env] Refusing to use old underlay in ${var_name}: ${old_repo}" >&2
-      return 1
-    fi
-  done
 fi

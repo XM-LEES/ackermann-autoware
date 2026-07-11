@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer="Autoracer Team",
     maintainer_email="autoracer@example.com",
-    description="Small localization helpers for Autoracer Hooke.",
+    description="Candidate localization helpers for Ackermann Autoware platforms.",
     license="Apache-2.0",
     entry_points={
         "console_scripts": [

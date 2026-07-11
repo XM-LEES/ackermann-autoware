@@ -4,6 +4,7 @@ import os
 import random
 import struct
 import subprocess
+import time
 from pathlib import Path
 
 import yaml
@@ -46,7 +47,7 @@ def test_vehicle_mapping_scripts_exist_and_record_required_topics():
     assert "/sensing/lidar/raw/pointcloud" in check_text
     assert "/sensing/lidar/filtered/pointcloud" in check_text
     assert "/sensing/imu/imu_data" in check_text
-    assert "c32_pointcloud_adapter" in stop_text
+    assert "RC_RUNTIME_STATE_FILE" in stop_text
 
     rc_dir = ROOT / "scripts" / "rc"
     public_scripts = {
@@ -79,8 +80,25 @@ def test_vehicle_mapping_scripts_exist_and_record_required_topics():
     assert "record_mapping_bag.sh" in start_bag_text
     assert "rc_start_sensors.sh" in start_bag_text
     assert "mapping_bag.env" in start_bag_text
+    for identity_field in (
+        "OWNER_UID",
+        "SENSOR_START_TICKS",
+        "SENSOR_PGID",
+        "REC_START_TICKS",
+        "REC_PGID",
+    ):
+        assert identity_field in start_bag_text
     assert "run_track.sh" not in start_bag_text
-    assert "kill -INT" in stop_bag_text
+    assert 'signal_process_group INT "${REC_PID}"' in stop_bag_text
+    assert "BAG_STOP_GRACE_SEC" in stop_bag_text
+    assert "BAG_TERM_GRACE_SEC" in stop_bag_text
+    assert "SENSOR_TERM_GRACE_SEC" in stop_bag_text
+    assert "process_matches_identity" in stop_bag_text
+    assert 'signal_process_group KILL "${REC_PID}"' in stop_bag_text
+    assert 'signal_process_group KILL "${SENSOR_PID}"' in stop_bag_text
+    assert stop_bag_text.index("./scripts/rc/rc_stop.sh") < stop_bag_text.index(
+        'signal_process_group TERM "${SENSOR_PID}"'
+    )
     assert "ros2 bag info" in stop_bag_text
 
     sensor_start_text = (rc_dir / "rc_start_sensors.sh").read_text()
@@ -103,33 +121,43 @@ def test_vehicle_mapping_scripts_exist_and_record_required_topics():
     assert "LAUNCH_API=false" not in localization_start_text
     assert "LAUNCH_VEHICLE_INTERFACE=false" in localization_start_text
     stop_text = (rc_dir / "rc_stop.sh").read_text()
-    assert "pkill" in stop_text
-    assert "graceful_patterns" in stop_text
+    assert "RC_RUNTIME_STATE_FILE" in stop_text
+    assert "START_TICKS" in stop_text
+    assert "STATE_ROOT" in stop_text
+    assert "kill -INT" in stop_text
     assert "SHUTDOWN_GRACE_SEC" in stop_text
     assert "INTERRUPT_GRACE_SEC" in stop_text
     assert '${INTERRUPT_GRACE_SEC:-10}' in stop_text
-    assert 'pkill -INT -u "${CURRENT_UID}" -f "${pattern}"' in stop_text
-    assert 'pkill -TERM -u "${CURRENT_UID}" -f "${pattern}"' in stop_text
-    assert "wait_for_patterns" in stop_text
+    assert "pkill" not in stop_text
     assert "traffic_reader" not in stop_text
-    assert "component_container" in stop_text
-    assert "topic_tools/relay" in stop_text
     assert "ROOT_DIR" in stop_text
-    assert "/install/[a]utoware_" in stop_text
+    assert "component_container" not in stop_text
+    assert "rviz2" not in stop_text
 
 
-def test_rc_stop_waits_then_kills_a_process_that_ignores_term():
+def test_rc_stop_waits_then_kills_the_tracked_process_that_ignores_term(tmp_path):
     stubborn = subprocess.Popen(
         [
             "bash",
             "-c",
-            "trap '' TERM; exec -a c32_pointcloud_adapter sleep 60",
+            "trap '' TERM INT; exec -a autoracer-owned-test-process sleep 60",
         ],
         start_new_session=True,
     )
     try:
+        start_ticks = Path(f"/proc/{stubborn.pid}/stat").read_text().split()[21]
+        state_file = tmp_path / "runtime.env"
+        state_file.write_text(
+            f"PID={stubborn.pid}\nSTART_TICKS={start_ticks}\nROOT_DIR={ROOT}\n"
+        )
         env = os.environ.copy()
-        env.update({"SHUTDOWN_GRACE_SEC": "1", "STOP_WAIT_SEC": "1"})
+        env.update(
+            {
+                "RC_RUNTIME_STATE_FILE": str(state_file),
+                "INTERRUPT_GRACE_SEC": "1",
+                "SHUTDOWN_GRACE_SEC": "1",
+            }
+        )
         result = subprocess.run(
             ["bash", "scripts/rc/rc_stop.sh"],
             cwd=ROOT,
@@ -148,6 +176,246 @@ def test_rc_stop_waits_then_kills_a_process_that_ignores_term():
     assert result.returncode == 0, result.stderr
     assert "syntax error" not in result.stderr
     assert "[rc-stop] RC runtime processes stopped" in result.stdout
+
+
+def test_rc_stop_leaves_an_untracked_ros_named_process_running(tmp_path):
+    unrelated = subprocess.Popen(
+        ["bash", "-c", "exec -a rviz2 sleep 60"],
+        start_new_session=True,
+    )
+    try:
+        env = os.environ.copy()
+        env["RC_RUNTIME_STATE_FILE"] = str(tmp_path / "missing.env")
+        result = subprocess.run(
+            ["bash", "scripts/rc/rc_stop.sh"],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+        assert unrelated.poll() is None
+    finally:
+        if unrelated.poll() is None:
+            unrelated.terminate()
+            unrelated.wait(timeout=2)
+
+    assert result.returncode == 0, result.stderr
+    assert "no tracked RC runtime" in result.stdout
+
+
+def test_rc_stop_tracks_child_that_survives_top_level_sigint(tmp_path):
+    child_file = tmp_path / "child.pid"
+    child_pid = None
+    parent = subprocess.Popen(
+        [
+            "bash",
+            "-c",
+            "trap 'exit 0' INT; "
+            "bash -c 'trap \"\" INT TERM; exec -a autoracer-child-test sleep 60' & "
+            f"echo $! > {child_file}; wait",
+        ],
+        start_new_session=True,
+    )
+    try:
+        for _ in range(20):
+            if child_file.exists():
+                break
+            time.sleep(0.05)
+        child_pid = int(child_file.read_text())
+        start_ticks = Path(f"/proc/{parent.pid}/stat").read_text().split()[21]
+        state_file = tmp_path / "runtime.env"
+        state_file.write_text(
+            f"PID={parent.pid}\nSTART_TICKS={start_ticks}\nROOT_DIR={ROOT}\n"
+        )
+        env = os.environ.copy()
+        env.update(
+            {
+                "RC_RUNTIME_STATE_FILE": str(state_file),
+                "INTERRUPT_GRACE_SEC": "1",
+                "SHUTDOWN_GRACE_SEC": "1",
+                "KILL_GRACE_SEC": "1",
+            }
+        )
+        result = subprocess.run(
+            ["bash", "scripts/rc/rc_stop.sh"],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=8,
+            check=False,
+        )
+        parent.wait(timeout=2)
+    finally:
+        if parent.poll() is None:
+            parent.kill()
+            parent.wait(timeout=2)
+        if child_pid is not None:
+            try:
+                os.kill(child_pid, 9)
+            except OSError:
+                pass
+
+    assert result.returncode == 0, result.stderr
+    assert not Path(f"/proc/{child_pid}").exists()
+
+
+def test_mapping_stop_escalates_when_recorder_ignores_sigint_and_sigterm(tmp_path):
+    recorder = subprocess.Popen(
+        ["bash", "-c", "trap '' INT TERM; exec -a ros2-bag-test sleep 60"],
+        start_new_session=True,
+    )
+    state_file = tmp_path / "mapping.env"
+    missing_bag = tmp_path / "missing-bag"
+    state_file.write_text(
+        f"OWNER_UID={os.getuid()}\n"
+        f"ROOT_DIR={ROOT}\n"
+        "RUN_ID=test\n"
+        f"BAG_PATH={missing_bag}\n"
+        "SENSOR_PID=\n"
+        "SENSOR_START_TICKS=\n"
+        "SENSOR_PGID=\n"
+        f"REC_PID={recorder.pid}\n"
+        f"REC_START_TICKS={Path(f'/proc/{recorder.pid}/stat').read_text().split()[21]}\n"
+        f"REC_PGID={os.getpgid(recorder.pid)}\n"
+        "SENSOR_LOG=none\n"
+        "RECORD_LOG=none\n"
+    )
+    try:
+        env = os.environ.copy()
+        env.update(
+            {
+                "AUTORACER_SOURCE_LOCAL_SETUP": "false",
+                "RC_MAPPING_STATE_FILE": str(state_file),
+                "RC_RUNTIME_STATE_FILE": str(tmp_path / "missing-runtime.env"),
+                "BAG_STOP_GRACE_SEC": "1",
+                "BAG_TERM_GRACE_SEC": "1",
+                "BAG_KILL_GRACE_SEC": "1",
+            }
+        )
+        result = subprocess.run(
+            ["bash", "scripts/rc/rc_stop_mapping_bag.sh"],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=8,
+            check=False,
+        )
+        recorder.wait(timeout=2)
+    finally:
+        if recorder.poll() is None:
+            recorder.kill()
+            recorder.wait(timeout=2)
+
+    assert result.returncode == 0, result.stderr
+    assert "sending SIGTERM" in result.stderr
+    assert "sending SIGKILL" in result.stderr
+    assert not state_file.exists()
+
+
+def test_mapping_stop_kills_owned_sensor_group_when_runtime_state_is_missing(tmp_path):
+    sensor = subprocess.Popen(
+        ["bash", "-c", "trap '' TERM; exec -a rc-sensor-test sleep 60"],
+        start_new_session=True,
+    )
+    state_file = tmp_path / "mapping.env"
+    state_file.write_text(
+        f"OWNER_UID={os.getuid()}\n"
+        f"ROOT_DIR={ROOT}\n"
+        "RUN_ID=test\n"
+        f"BAG_PATH={tmp_path / 'missing-bag'}\n"
+        f"SENSOR_PID={sensor.pid}\n"
+        f"SENSOR_START_TICKS={Path(f'/proc/{sensor.pid}/stat').read_text().split()[21]}\n"
+        f"SENSOR_PGID={os.getpgid(sensor.pid)}\n"
+        "REC_PID=\n"
+        "REC_START_TICKS=\n"
+        "REC_PGID=\n"
+        "SENSOR_LOG=none\n"
+        "RECORD_LOG=none\n"
+    )
+    try:
+        env = os.environ.copy()
+        env.update(
+            {
+                "AUTORACER_SOURCE_LOCAL_SETUP": "false",
+                "RC_MAPPING_STATE_FILE": str(state_file),
+                "RC_RUNTIME_STATE_FILE": str(tmp_path / "missing-runtime.env"),
+                "SENSOR_TERM_GRACE_SEC": "1",
+                "SENSOR_KILL_GRACE_SEC": "1",
+            }
+        )
+        result = subprocess.run(
+            ["bash", "scripts/rc/rc_stop_mapping_bag.sh"],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=8,
+            check=False,
+        )
+        sensor.wait(timeout=2)
+    finally:
+        if sensor.poll() is None:
+            sensor.kill()
+            sensor.wait(timeout=2)
+
+    assert result.returncode == 0, result.stderr
+    assert "using owned process-group fallback" in result.stderr
+    assert "sending SIGKILL" in result.stderr
+    assert not state_file.exists()
+
+
+def test_mapping_stop_refuses_stale_reused_process_identity(tmp_path):
+    unrelated = subprocess.Popen(
+        ["bash", "-c", "exec -a unrelated-mapping-process sleep 60"],
+        start_new_session=True,
+    )
+    state_file = tmp_path / "mapping.env"
+    actual_ticks = int(Path(f"/proc/{unrelated.pid}/stat").read_text().split()[21])
+    state_file.write_text(
+        f"OWNER_UID={os.getuid()}\n"
+        f"ROOT_DIR={ROOT}\n"
+        "RUN_ID=stale\n"
+        f"BAG_PATH={tmp_path / 'missing-bag'}\n"
+        "SENSOR_PID=\n"
+        "SENSOR_START_TICKS=\n"
+        "SENSOR_PGID=\n"
+        f"REC_PID={unrelated.pid}\n"
+        f"REC_START_TICKS={actual_ticks + 1}\n"
+        f"REC_PGID={os.getpgid(unrelated.pid)}\n"
+        "SENSOR_LOG=none\n"
+        "RECORD_LOG=none\n"
+    )
+    try:
+        env = os.environ.copy()
+        env.update(
+            {
+                "AUTORACER_SOURCE_LOCAL_SETUP": "false",
+                "RC_MAPPING_STATE_FILE": str(state_file),
+                "RC_RUNTIME_STATE_FILE": str(tmp_path / "missing-runtime.env"),
+                "BAG_STOP_GRACE_SEC": "1",
+            }
+        )
+        result = subprocess.run(
+            ["bash", "scripts/rc/rc_stop_mapping_bag.sh"],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=8,
+            check=False,
+        )
+        assert unrelated.poll() is None
+    finally:
+        if unrelated.poll() is None:
+            unrelated.terminate()
+            unrelated.wait(timeout=2)
+
+    assert result.returncode != 0
+    assert "identity mismatch" in result.stderr
 
 
 def test_script_layers_keep_rc_common_and_disabled_hooke_boundaries():
@@ -336,16 +604,12 @@ def test_mock_lidar_diagnostics_are_not_part_of_rc_flow():
 
 def test_official_autoware_rviz_plugins_are_declared():
     repos_text = (ROOT / "autoracer.repos").read_text()
-    import_script = (ROOT / "scripts" / "import_dependencies.sh").read_text()
     build_minimal = (ROOT / "scripts" / "build_minimal.sh").read_text()
-    build_bench = (ROOT / "scripts" / "build_bench.sh").read_text()
     package_xml = (
         ROOT / "src" / "autoracer_rc_launch" / "package.xml"
     ).read_text()
 
     assert "autoware_rviz_plugins.git" in repos_text
-    assert "src/autoware/autoware_rviz_plugins" in import_script
-    assert "src/external/autoware/autoware_rviz_plugins" in import_script
     autoware_rviz_packages = (
         "autoware_localization_rviz_plugin",
         "autoware_planning_rviz_plugin",
@@ -360,11 +624,7 @@ def test_official_autoware_rviz_plugins_are_declared():
 
     for package in autoware_rviz_packages + tier4_rviz_packages:
         assert package in build_minimal
-        assert package in build_bench
         assert package in package_xml
-
-    for package in tier4_rviz_packages:
-        assert package in import_script
 
 
 def test_localization_parameters_come_from_official_autoware_launch():

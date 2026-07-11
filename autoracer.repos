@@ -1,3 +1,6 @@
+# Maintainer provenance for the upstream snapshots vendored under src/external.
+# A normal checkout already contains these sources; do not run vcs import over
+# the tracked directories. Updating a snapshot is a deliberate maintainer task.
 repositories:
   src/external/autoware/autoware_cmake:
     type: git
@@ -49,8 +52,7 @@ repositories:
     url: https://github.com/tier4/autoware_core.git
     version: f24f324ef73307b0da6a8959735ecc9aca5ff133
 
-  # Only selected packages are built from Universe, currently tier4_api_utils
-  # for hooke2_interface and optional vehicle/sensing support packages.
+  # Only packages selected by scripts/build_minimal.sh enter the active build.
   src/external/autoware/universe:
     type: git
     url: https://github.com/tier4/autoware_universe.git

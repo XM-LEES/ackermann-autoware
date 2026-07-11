@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ackermann Autoware Project Architecture</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172126;
+      --muted: #5d6a70;
+      --line: #cbd4d7;
+      --line-strong: #9eabad;
+      --paper: #f4f6f5;
+      --surface: #ffffff;
+      --surface-soft: #eef2f1;
+      --official: #147a68;
+      --official-soft: #e2f2ed;
+      --shared: #9a6200;
+      --shared-soft: #fff1d2;
+      --rc: #2666a3;
+      --rc-soft: #e4eef8;
+      --hooke: #9b3f59;
+      --hooke-soft: #f8e7ec;
+      --external: #59646a;
+      --external-soft: #e9edef;
+      --danger: #a23c35;
+      --shadow: 0 10px 28px rgba(34, 48, 53, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { margin: 0; min-height: 100%; }
+
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    button { font: inherit; letter-spacing: 0; }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 18px 28px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      flex: 0 0 42px;
+      color: var(--official);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 720;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .revision {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      white-space: nowrap;
+      font-size: 12px;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--official);
+      box-shadow: 0 0 0 4px var(--official-soft);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 2px;
+      padding: 0 28px;
+      overflow-x: auto;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tab {
+      min-height: 44px;
+      padding: 0 16px;
+      border: 0;
+      border-bottom: 3px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .tab:hover { color: var(--ink); background: var(--surface-soft); }
+
+    .tab[aria-selected="true"] {
+      color: var(--ink);
+      border-bottom-color: var(--official);
+      font-weight: 700;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      min-height: 0;
+    }
+
+    .canvas {
+      min-width: 0;
+      padding: 24px;
+      overflow: auto;
+      background-color: var(--paper);
+      background-image:
+        linear-gradient(rgba(121, 137, 141, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(121, 137, 141, 0.08) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    .view { display: none; max-width: 1460px; margin: 0 auto; }
+    .view.is-active { display: block; }
+
+    .view-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+
+    .view-heading h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.3;
+    }
+
+    .view-heading p {
+      max-width: 720px;
+      margin: 5px 0 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 10px 14px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend i { width: 10px; height: 10px; border-radius: 2px; }
+
+    .diagram-band {
+      position: relative;
+      padding: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: var(--shadow);
+    }
+
+    .band-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .band-title strong { font-size: 13px; }
+    .band-title span { color: var(--muted); font-size: 11px; }
+
+    .node {
+      position: relative;
+      width: 100%;
+      min-height: 70px;
+      padding: 12px 13px;
+      text-align: left;
+      border: 1px solid var(--line-strong);
+      border-left: 4px solid var(--external);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+      transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+    }
+
+    .node:hover, .node:focus-visible {
+      z-index: 2;
+      transform: translateY(-1px);
+      border-color: var(--ink);
+      box-shadow: 0 6px 16px rgba(34, 48, 53, 0.12);
+      outline: none;
+    }
+
+    .node.official { border-left-color: var(--official); background: var(--official-soft); }
+    .node.shared { border-left-color: var(--shared); background: var(--shared-soft); }
+    .node.rc { border-left-color: var(--rc); background: var(--rc-soft); }
+    .node.hooke { border-left-color: var(--hooke); background: var(--hooke-soft); }
+    .node.external { border-left-color: var(--external); background: var(--external-soft); }
+
+    .node-title {
+      display: block;
+      margin-right: 0;
+      font-size: 13px;
+      line-height: 1.3;
+      font-weight: 720;
+      overflow-wrap: anywhere;
+    }
+
+    .node:has(.badge) .node-title { margin-right: 58px; }
+
+    .node-meta {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 10px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 3px 6px;
+      border: 1px solid currentColor;
+      border-radius: 3px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.7);
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.8fr) minmax(420px, 1.7fr) minmax(220px, 0.8fr);
+      gap: 30px;
+      align-items: stretch;
+    }
+
+    .column {
+      position: relative;
+      display: grid;
+      align-content: start;
+      gap: 10px;
+    }
+
+    .column + .column::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: -27px;
+      width: 22px;
+      border-top: 2px solid var(--line-strong);
+    }
+
+    .column + .column::after {
+      content: "";
+      position: absolute;
+      top: calc(50% - 4px);
+      left: -8px;
+      border: 5px solid transparent;
+      border-left-color: var(--line-strong);
+    }
+
+    .stack-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .stack-grid .node { min-height: 82px; }
+
+    .status-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .metric {
+      padding: 11px 12px;
+      border-top: 3px solid var(--line-strong);
+      background: var(--surface);
+    }
+
+    .metric strong { display: block; font-size: 12px; }
+    .metric span { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 30px;
+      align-items: center;
+    }
+
+    .flow-step { position: relative; }
+    .flow-step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -25px;
+      width: 20px;
+      border-top: 2px solid var(--line-strong);
+    }
+    .flow-step:not(:last-child)::before {
+      content: "";
+      position: absolute;
+      z-index: 1;
+      top: calc(50% - 4px);
+      right: -29px;
+      border: 5px solid transparent;
+      border-left-color: var(--line-strong);
+    }
+
+    .support-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .support-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    .runtime-flow-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1fr) 26px minmax(0, 0.9fr) 26px minmax(0, 0.9fr) 26px minmax(0, 1fr);
+      gap: 6px;
+      align-items: center;
+    }
+
+    .runtime-stack { display: grid; gap: 9px; }
+
+    .runtime-arrow {
+      color: var(--line-strong);
+      text-align: center;
+      font-size: 22px;
+    }
+
+    .feedback-strip {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .feedback-arrow {
+      color: var(--rc);
+      text-align: center;
+      font-size: 24px;
+    }
+
+    .localization-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr) 44px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+
+    .arrow-cell {
+      color: var(--line-strong);
+      text-align: center;
+      font-size: 24px;
+      font-weight: 400;
+    }
+
+    .source-pair { display: grid; gap: 9px; }
+
+    .rc-layout { display: grid; gap: 16px; }
+    .rc-sensing { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .chain { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; align-items: center; }
+    .chain .node { min-height: 84px; }
+
+    .deployment-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 70px minmax(0, 1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .environment {
+      display: grid;
+      gap: 10px;
+      padding: 15px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .environment h3 { margin: 0; font-size: 14px; }
+    .environment p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .transfer { display: grid; place-content: center; color: var(--muted); text-align: center; font-size: 10px; }
+    .transfer svg { width: 46px; height: 28px; margin: 0 auto 6px; color: var(--official); }
+
+    .extension-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .detail-panel {
+      min-width: 0;
+      padding: 22px 20px;
+      overflow-y: auto;
+      border-left: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .detail-kicker {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .detail-panel h2 {
+      margin: 8px 0 4px;
+      font-size: 18px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
+    .detail-owner { margin: 0 0 16px; color: var(--official); font-size: 11px; font-weight: 700; }
+    .detail-panel > p { color: var(--muted); line-height: 1.65; }
+
+    .detail-section { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+    .detail-section h3 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; }
+    .detail-section code { display: block; color: var(--ink); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 9px 28px;
+      border-top: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    @media (max-width: 1120px) {
+      .workspace { grid-template-columns: minmax(0, 1fr) 280px; }
+      .overview-grid { grid-template-columns: 1fr; gap: 14px; }
+      .column + .column::before, .column + .column::after { display: none; }
+      .chain { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .flow-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .flow-step::before, .flow-step::after { display: none; }
+      .runtime-flow-grid { grid-template-columns: 1fr; }
+      .runtime-arrow { transform: rotate(90deg); }
+    }
+
+    @media (max-width: 780px) {
+      .topbar { align-items: flex-start; padding: 15px 16px; }
+      .revision { display: none; }
+      .tabs { padding: 0 12px; }
+      .workspace { display: block; }
+      .canvas { padding: 16px 12px; overflow: visible; }
+      .view-heading { display: block; }
+      .legend { justify-content: flex-start; margin-top: 12px; }
+      .detail-panel { border-top: 1px solid var(--line); border-left: 0; }
+      .stack-grid, .status-strip, .support-grid, .rc-sensing, .extension-grid { grid-template-columns: 1fr 1fr; }
+      .flow-row, .chain { grid-template-columns: 1fr 1fr; gap: 12px; }
+      .runtime-flow-grid, .feedback-strip { grid-template-columns: 1fr; }
+      .runtime-arrow, .feedback-arrow { transform: rotate(90deg); }
+      .localization-grid { grid-template-columns: 1fr; }
+      .arrow-cell { transform: rotate(90deg); }
+      .deployment-grid { grid-template-columns: 1fr; }
+      .transfer svg { transform: rotate(90deg); }
+      .footer { display: block; padding: 9px 16px; }
+      .footer span + span { display: block; margin-top: 4px; }
+    }
+
+    @media (max-width: 460px) {
+      .brand h1 { font-size: 17px; }
+      .brand p { display: none; }
+      .diagram-band { padding: 12px; }
+      .stack-grid, .status-strip, .support-grid, .support-grid.two, .rc-sensing, .extension-grid, .flow-row, .chain { grid-template-columns: 1fr; }
+      .node { min-height: 66px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 48 48" role="img" aria-label="Architecture graph">
+          <rect x="4" y="5" width="15" height="13" rx="2" fill="currentColor"></rect>
+          <rect x="29" y="5" width="15" height="13" rx="2" fill="#2666a3"></rect>
+          <rect x="16.5" y="30" width="15" height="13" rx="2" fill="#9a6200"></rect>
+          <path d="M19 11.5h10M11.5 18v7.5h12.5M36.5 18v7.5H24" fill="none" stroke="#59646a" stroke-width="2"></path>
+        </svg>
+        <div>
+          <h1>Ackermann Autoware Project Architecture</h1>
+          <p>RC and Hooke profiles on one official Autoware integration boundary</p>
+        </div>
+      </div>
+      <div class="revision"><span class="live-dot"></span>Architecture status is commit-scoped</div>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Architecture views">
+      <button class="tab" role="tab" data-view="overview" aria-selected="true" aria-controls="view-overview">Project Overview</button>
+      <button class="tab" role="tab" data-view="runtime" aria-selected="false" aria-controls="view-runtime">Shared Runtime</button>
+      <button class="tab" role="tab" data-view="rc" aria-selected="false" aria-controls="view-rc">RC Platform</button>
+      <button class="tab" role="tab" data-view="deployment" aria-selected="false" aria-controls="view-deployment">Deployment &amp; Extensions</button>
+    </nav>
+
+    <main class="workspace">
+      <section class="canvas" aria-live="polite">
+        <article class="view is-active" id="view-overview" role="tabpanel">
+          <div class="view-heading">
+            <div>
+              <h2>One project, two platform profiles, one shared autonomy stack</h2>
+              <p>Platform-specific hardware is isolated in profiles and adapters. Autonomy modules communicate through official Autoware contracts.</p>
+            </div>
+            <div class="legend" aria-label="Ownership legend">
+              <span><i style="background:var(--official)"></i>Official</span>
+              <span><i style="background:var(--shared)"></i>Project shared</span>
+              <span><i style="background:var(--rc)"></i>RC</span>
+              <span><i style="background:var(--hooke)"></i>Hooke</span>
+            </div>
+          </div>
+
+          <div class="diagram-band">
+            <div class="overview-grid">
+              <section class="column">
+                <div class="band-title"><strong>Platform profiles</strong><span>hardware facts</span></div>
+                <button class="node rc" data-detail-id="rc-profile"><span class="badge">active</span><span class="node-title">RC platform</span><span class="node-meta">autoracer_rc + autoracer_rc_sensor_kit</span></button>
+                <button class="node hooke" data-detail-id="hooke-profile"><span class="badge">pending</span><span class="node-title">Hooke platform</span><span class="node-meta">autoracer_hooke + sensor kit</span></button>
+                <button class="node external" data-detail-id="map-assets"><span class="badge">asset</span><span class="node-title">Map packages</span><span class="node-meta">PCD + Lanelet2 + projector</span></button>
+              </section>
+
+              <section class="column">
+                <div class="band-title"><strong>Shared official Autoware stack</strong><span>same contracts for both profiles</span></div>
+                <div class="stack-grid">
+                  <button class="node official" data-detail-id="map"><span class="badge">active</span><span class="node-title">Map</span><span class="node-meta">pointcloud + lanelet</span></button>
+                  <button class="node official" data-detail-id="sensing"><span class="badge">active</span><span class="node-title">Sensing</span><span class="node-meta">official topics</span></button>
+                  <button class="node official" data-detail-id="localization"><span class="badge">active</span><span class="node-title">Localization</span><span class="node-meta">NDT + Gyro + EKF</span></button>
+                  <button class="node official" data-detail-id="perception"><span class="badge">off</span><span class="node-title">Perception</span><span class="node-meta">available_disabled</span></button>
+                  <button class="node official" data-detail-id="planning"><span class="badge">active</span><span class="node-title">Planning</span><span class="node-meta">route + behavior + motion</span></button>
+                  <button class="node official" data-detail-id="control"><span class="badge">active</span><span class="node-title">Control</span><span class="node-meta">follower + VehicleCmdGate</span></button>
+                  <button class="node official" data-detail-id="ad-api"><span class="badge">active</span><span class="node-title">AD API</span><span class="node-meta">operator-facing services</span></button>
+                  <button class="node official" data-detail-id="system"><span class="badge">active</span><span class="node-title">System / Diagnostics</span><span class="node-meta">health + state</span></button>
+                </div>
+              </section>
+
+              <section class="column">
+                <div class="band-title"><strong>Platform boundary</strong><span>transport isolation</span></div>
+                <button class="node shared" data-detail-id="safety"><span class="badge">active</span><span class="node-title">Safety gate</span><span class="node-meta">enable + limits + timeout</span></button>
+                <button class="node rc" data-detail-id="rc-adapter"><span class="badge">active</span><span class="node-title">RC adapter</span><span class="node-meta">rc_serial_interface / UART</span></button>
+                <button class="node hooke" data-detail-id="hooke-adapter"><span class="badge">pending</span><span class="node-title">Hooke adapter</span><span class="node-meta">target CAN boundary</span></button>
+              </section>
+            </div>
+          </div>
+
+          <div class="status-strip">
+            <div class="metric" style="border-color:var(--rc)"><strong>RC runtime</strong><span>active profile and current validation target</span></div>
+            <div class="metric" style="border-color:var(--hooke)"><strong>Hooke runtime</strong><span>pending; COLCON_IGNORE protected</span></div>
+            <div class="metric" style="border-color:var(--official)"><strong>Default algorithms</strong><span>official localization, planning and control</span></div>
+            <div class="metric" style="border-color:var(--shared)"><strong>Local algorithms</strong><span>candidate until explicitly wired and verified</span></div>
+          </div>
+        </article>
+
+        <article class="view" id="view-runtime" role="tabpanel" hidden>
+          <div class="view-heading">
+            <div>
+              <h2>Shared runtime and data ownership</h2>
+              <p>The top-level official launch composes the same Map, Sensing, Localization, Planning, Control, API and System layers for every ready profile.</p>
+            </div>
+          </div>
+
+          <section class="diagram-band">
+            <div class="band-title"><strong>Primary autonomy flow</strong><span>official contracts</span></div>
+            <div class="runtime-flow-grid">
+              <div class="runtime-stack">
+                <button class="node official" data-detail-id="map"><span class="node-title">Map</span><span class="node-meta">PCD / Lanelet2 / projector</span></button>
+                <button class="node official" data-detail-id="sensing"><span class="node-title">Sensing</span><span class="node-meta">pointcloud / IMU / sensor TF</span></button>
+              </div>
+              <div class="runtime-arrow">&#8594;</div>
+              <div class="runtime-stack">
+                <button class="node official" data-detail-id="localization"><span class="node-title">Localization</span><span class="node-meta">pose + kinematic state</span></button>
+                <button class="node official" data-detail-id="perception"><span class="badge">off</span><span class="node-title">Perception</span><span class="node-meta">available_disabled</span></button>
+              </div>
+              <div class="runtime-arrow">&#8594;</div>
+              <button class="node official" data-detail-id="planning"><span class="node-title">Planning</span><span class="node-meta">/planning/trajectory</span></button>
+              <div class="runtime-arrow">&#8594;</div>
+              <button class="node official" data-detail-id="control"><span class="node-title">Control</span><span class="node-meta">trajectory follower + VehicleCmdGate</span></button>
+              <div class="runtime-arrow">&#8594;</div>
+              <button class="node shared" data-detail-id="platform-boundary"><span class="node-title">Platform boundary</span><span class="node-meta">Safety gate + adapter + chassis</span></button>
+            </div>
+            <div class="feedback-strip">
+              <button class="node rc" data-detail-id="vehicle-feedback"><span class="node-title">Vehicle feedback loop</span><span class="node-meta">chassis -> adapter -> /vehicle/status/*</span></button>
+              <div class="feedback-arrow">&#8634;</div>
+              <button class="node official" data-detail-id="feedback-consumers"><span class="node-title">Localization / Control</span><span class="node-meta">velocity / steering / gear / control mode</span></button>
+            </div>
+            <div class="support-grid two">
+              <button class="node official" data-detail-id="ad-api"><span class="badge">active</span><span class="node-title">AD API</span><span class="node-meta">initialization / route / mode / state</span></button>
+              <button class="node official" data-detail-id="system"><span class="badge">active</span><span class="node-title">System / Diagnostics</span><span class="node-meta">monitoring / diagnostics graph</span></button>
+            </div>
+          </section>
+
+          <section class="diagram-band" style="margin-top:16px">
+            <div class="band-title"><strong>Localization composition</strong><span>pose and twist fuse before final odometry</span></div>
+            <div class="localization-grid">
+              <div class="source-pair">
+                <button class="node official" data-detail-id="ndt"><span class="node-title">NDT Scan Matcher</span><span class="node-meta">map + pointcloud + seed -> pose</span></button>
+                <button class="node official" data-detail-id="gyro"><span class="node-title">Gyro Odometer</span><span class="node-meta">vehicle velocity + IMU -> twist</span></button>
+              </div>
+              <div class="arrow-cell">&#8594;</div>
+              <button class="node official" data-detail-id="ekf"><span class="node-title">EKF Localizer</span><span class="node-meta">pose + twist + /initialpose3d</span></button>
+              <div class="arrow-cell">&#8594;</div>
+              <button class="node official" data-detail-id="stop-filter"><span class="node-title">Stop Filter</span><span class="node-meta">/localization/kinematic_state</span></button>
+            </div>
+          </section>
+        </article>
+
+        <article class="view" id="view-rc" role="tabpanel" hidden>
+          <div class="view-heading">
+            <div>
+              <h2>RC active profile: sensing, localization and chassis loop</h2>
+              <p>Manual initial pose seeds NDT; vehicle speed and IMU feed the twist estimator; the final command passes two distinct gate layers before UART.</p>
+            </div>
+          </div>
+
+          <div class="rc-layout">
+            <section class="diagram-band">
+              <div class="band-title"><strong>Sensing and initialization</strong><span>autoracer_rc_sensor_kit</span></div>
+              <div class="rc-sensing">
+                <div class="source-pair">
+                  <button class="node rc" data-detail-id="c32"><span class="node-title">Leishen C32 + lslidar</span><span class="node-meta">raw pointcloud / lidar_top</span></button>
+                  <button class="node shared" data-detail-id="c32-adapter"><span class="node-title">C32 pointcloud adapter</span><span class="node-meta">PointXYZIRC / concatenated</span></button>
+                </div>
+                <div class="source-pair">
+                  <button class="node rc" data-detail-id="imu"><span class="node-title">Hipnuc IMU + Madgwick</span><span class="node-meta">raw -> /sensing/imu/imu_data</span></button>
+                  <button class="node official" data-detail-id="manual-init"><span class="node-title">Manual initial pose</span><span class="node-meta">RViz -> AD API -> /initialpose3d</span></button>
+                </div>
+              </div>
+            </section>
+
+            <section class="diagram-band">
+              <div class="band-title"><strong>Localization</strong><span>NDT pose + Gyro twist + EKF fusion</span></div>
+              <div class="localization-grid">
+                <div class="source-pair">
+                  <button class="node official" data-detail-id="ndt"><span class="node-title">NDT pose estimator</span><span class="node-meta">concatenated pointcloud + PCD map</span></button>
+                  <button class="node official" data-detail-id="gyro"><span class="node-title">Gyro twist estimator</span><span class="node-meta">IMU + converted velocity</span></button>
+                </div>
+                <div class="arrow-cell">&#8594;</div>
+                <button class="node official" data-detail-id="ekf"><span class="node-title">EKF Localizer</span><span class="node-meta">/localization/pose_with_covariance</span></button>
+                <div class="arrow-cell">&#8594;</div>
+                <button class="node official" data-detail-id="stop-filter"><span class="node-title">Stop Filter</span><span class="node-meta">/localization/kinematic_state</span></button>
+              </div>
+            </section>
+
+            <section class="diagram-band">
+              <div class="band-title"><strong>Planning, control and hardware</strong><span>closed feedback loop</span></div>
+              <div class="chain">
+                <div class="flow-step"><button class="node official" data-detail-id="planning"><span class="node-title">Planning</span><span class="node-meta">trajectory</span></button></div>
+                <div class="flow-step"><button class="node official" data-detail-id="trajectory-follower"><span class="node-title">Trajectory follower</span><span class="node-meta">lateral + longitudinal</span></button></div>
+                <div class="flow-step"><button class="node official" data-detail-id="vehicle-cmd-gate"><span class="node-title">VehicleCmdGate</span><span class="node-meta">operation / emergency</span></button></div>
+                <div class="flow-step"><button class="node shared" data-detail-id="safety"><span class="node-title">Safety gate</span><span class="node-meta">drive enable / limits</span></button></div>
+                <div class="flow-step"><button class="node rc" data-detail-id="rc-adapter"><span class="node-title">rc_serial_interface</span><span class="node-meta">UART command + feedback</span></button></div>
+                <div class="flow-step"><button class="node rc" data-detail-id="stm32"><span class="node-title">STM32 chassis</span><span class="node-meta">/vehicle/status/*</span></button></div>
+              </div>
+              <div class="feedback-strip">
+                <button class="node rc" data-detail-id="vehicle-feedback"><span class="node-title">Vehicle feedback loop</span><span class="node-meta">STM32 -> rc_serial_interface -> /vehicle/status/*</span></button>
+                <div class="feedback-arrow">&#8634;</div>
+                <button class="node official" data-detail-id="feedback-consumers"><span class="node-title">Localization / Control</span><span class="node-meta">closed-loop state inputs</span></button>
+              </div>
+            </section>
+          </div>
+        </article>
+
+        <article class="view" id="view-deployment" role="tabpanel" hidden>
+          <div class="view-heading">
+            <div>
+              <h2>Development, deployment and replacement boundaries</h2>
+              <p>Source and maps move through explicit artifacts; architecture differences stay in profiles and adapters instead of machine-specific branches.</p>
+            </div>
+          </div>
+
+          <section class="diagram-band">
+            <div class="deployment-grid">
+              <div class="environment">
+                <h3>x86 development and mapping</h3>
+                <p>Repository analysis, tests, rosbag inspection, Super-LIO, map quality gates and Lanelet2 packaging.</p>
+                <button class="node external" data-detail-id="x86"><span class="badge">dev</span><span class="node-title">Development workspace</span><span class="node-meta">architecture-independent source</span></button>
+                <button class="node external" data-detail-id="mapping"><span class="badge">data</span><span class="node-title">Mapping pipeline</span><span class="node-meta">bag -> PCD -> Autoware map</span></button>
+              </div>
+              <div class="transfer">
+                <svg viewBox="0 0 64 32" aria-hidden="true"><path d="M4 16h50M44 7l10 9-10 9" fill="none" stroke="currentColor" stroke-width="3"></path></svg>
+                commit + map sync
+              </div>
+              <div class="environment">
+                <h3>Orin onboard runtime</h3>
+                <p>ARM64 build, sensor drivers, official Autoware launch, diagnostics and live chassis interfaces.</p>
+                <button class="node rc" data-detail-id="orin"><span class="badge">runtime</span><span class="node-title">Onboard workspace</span><span class="node-meta">same commit / ARM64 evidence</span></button>
+                <button class="node shared" data-detail-id="operator"><span class="badge">ops</span><span class="node-title">Operator entrypoints</span><span class="node-meta">scripts/rc / scripts/hooke / common</span></button>
+              </div>
+            </div>
+          </section>
+
+          <section class="diagram-band" style="margin-top:16px">
+            <div class="band-title"><strong>Custom algorithm extension</strong><span>replace implementation, preserve contract</span></div>
+            <div class="extension-grid">
+              <button class="node official" data-detail-id="official-module"><span class="badge">default</span><span class="node-title">Official module</span><span class="node-meta">pinned upstream implementation</span></button>
+              <button class="node shared" data-detail-id="custom-algorithm"><span class="badge">candidate</span><span class="node-title">Custom algorithm extension</span><span class="node-meta">same topic / message / frame contract</span></button>
+              <button class="node shared" data-detail-id="thin-adapter"><span class="badge">only if needed</span><span class="node-title">Thin adapter</span><span class="node-meta">explicit interface conversion</span></button>
+            </div>
+          </section>
+        </article>
+      </section>
+
+      <aside class="detail-panel" aria-label="Selected architecture node">
+        <div class="detail-kicker" id="detail-state">project boundary</div>
+        <h2 id="detail-title">Select a node</h2>
+        <div class="detail-owner" id="detail-owner">Click any block in the graph</div>
+        <p id="detail-description">The detail panel identifies ownership, runtime status, contracts and source boundaries without adding another architecture source of truth.</p>
+        <div class="detail-section"><h3>Input / contract</h3><code id="detail-input">official Autoware contracts</code></div>
+        <div class="detail-section"><h3>Output / responsibility</h3><code id="detail-output">profile, module or adapter boundary</code></div>
+        <div class="detail-section"><h3>Source boundary</h3><code id="detail-source">docs/architecture_zh.md</code></div>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <span>Offline architecture browser; no runtime connection or external assets.</span>
+      <span>Canonical text: docs/architecture_zh.md</span>
+    </footer>
+  </div>
+
+  <script>
+    const details = {
+      "rc-profile": ["active", "RC platform profile", "Project / RC", "Vehicle geometry, sensor extrinsics, sensing launch and UART chassis integration.", "vehicle_model=autoracer_rc\nsensor_model=autoracer_rc_sensor_kit", "Official sensing and vehicle-status contracts", "src/autoracer_rc_*"],
+      "hooke-profile": ["pending", "Hooke platform profile", "Project / Hooke", "Target profile boundary. Placeholders remain guarded until descriptions, sensing, adapter and calibration are coherent.", "vehicle_model=autoracer_hooke\nsensor_model=autoracer_hooke_sensor_kit", "Same official contracts as RC", "src/autoracer_hooke_* (COLCON_IGNORE)"],
+      "map-assets": ["asset", "Autoware map package", "Mapping pipeline", "A publishable map keeps pointcloud, metadata, Lanelet2 and projector information in one coordinate system.", "Super-LIO PCD + manual Lanelet2 annotation", "pointcloud_map.pcd\npointcloud_map_metadata.yaml\nlanelet2_map.osm\nmap_projector_info.yaml", "tools/mapping + external map directory"],
+      "map": ["active", "Map", "Official Autoware", "Loads pointcloud and vector maps and establishes the map coordinate boundary.", "PCD + Lanelet2 + projector", "Map topics and map frame", "src/external/autoware / tier4_map_launch"],
+      "sensing": ["active", "Sensing", "Official + platform profile", "Platform drivers and small adapters publish stable Autoware sensing contracts.", "LiDAR / IMU / platform TF", "/sensing/lidar/concatenated/pointcloud\n/sensing/imu/imu_data", "sensor-kit profile + tier4_sensing_launch"],
+      "localization": ["active", "Localization", "Official Autoware", "NDT estimates pose, Gyro Odometer estimates twist, and EKF plus Stop Filter produce the final kinematic state.", "pointcloud + map + initial pose + IMU + vehicle velocity", "/localization/pose_with_covariance\n/localization/kinematic_state", "tier4_localization_launch"],
+      "perception": ["available_disabled", "Perception", "Official Autoware", "The official boundary is retained, but RC defaults do not launch perception modules.", "sensor topics", "objects and environment semantics when enabled", "launch_perception=false"],
+      "planning": ["active", "Planning", "Official Autoware", "Mission, behavior and motion planning consume map and localization state to produce a trajectory.", "Lanelet2 + route + kinematic state + optional perception", "/planning/trajectory", "tier4_planning_launch"],
+      "control": ["active", "Control", "Official Autoware", "Trajectory follower computes commands; VehicleCmdGate arbitrates operation mode and emergency state.", "/planning/trajectory + /localization/kinematic_state", "/control/command/control_cmd", "tier4_control_launch"],
+      "ad-api": ["active", "AD API", "Official Autoware", "Operator-facing initialization, route, state and operation-mode services used by official RViz plugins or another client.", "operator request", "official API services and state", "tier4_autoware_api_launch"],
+      "system": ["active", "System / Diagnostics", "Official Autoware", "Aggregates node diagnostics and host health into system-level status.", "diagnostics + host monitors", "system state and fault graph", "tier4_system_launch"],
+      "safety": ["active", "Safety gate", "Project shared", "A final platform-independent boundary for drive enable, speed, steering and command timeout. It does not replace VehicleCmdGate.", "/control/command/control_cmd", "/autoracer/control/safe_control_cmd", "src/autoracer_safety"],
+      "platform-boundary": ["active", "Platform boundary", "Project shared + profile", "The safety gate and vehicle adapter isolate hardware transport from the official autonomy stack.", "/control/command/control_cmd", "gated hardware command + /vehicle/status/*", "autoracer_safety + autoracer_vehicle_interface"],
+      "vehicle-feedback": ["active", "Vehicle feedback loop", "Platform adapter contract", "Chassis feedback returns through the platform adapter as official vehicle-status messages.", "chassis velocity / steering / gear / mode", "/vehicle/status/*", "autoracer_vehicle_interface + platform hardware"],
+      "feedback-consumers": ["active", "Localization and Control feedback", "Official Autoware", "Localization and Control consume canonical vehicle status instead of UART or CAN private reports.", "/vehicle/status/*", "twist estimation / control state / diagnostics", "official topic contract"],
+      "rc-adapter": ["active", "RC vehicle adapter", "Project / RC", "Converts gated Autoware control into the STM32 UART frame and publishes official vehicle status reports.", "/autoracer/control/safe_control_cmd", "UART + /vehicle/status/*", "src/autoracer_vehicle_interface / rc_serial_interface"],
+      "hooke-adapter": ["pending", "Hooke vehicle adapter", "Project / Hooke", "Target CAN adapter must consume gated control and publish the same official vehicle status surface.", "/autoracer/control/safe_control_cmd", "CAN + /vehicle/status/*", "target profile; reference in src/hooke2_vehicle"],
+      "ndt": ["active", "NDT Scan Matcher", "Official Autoware", "Matches the current pointcloud against the PCD map. It produces pose estimator output, not final kinematic state.", "concatenated pointcloud + PCD map + seed", "/localization/pose_estimator/pose_with_covariance", "autoware_ndt_scan_matcher"],
+      "gyro": ["active", "Gyro Odometer", "Official Autoware", "Combines converted vehicle velocity with IMU angular velocity to estimate twist.", "/sensing/vehicle_velocity_converter/twist_with_covariance\n/sensing/imu/imu_data", "/localization/twist_estimator/twist_with_covariance", "autoware_gyro_odometer"],
+      "ekf": ["active", "EKF Localizer", "Official Autoware", "Fuses pose and twist, accepts /initialpose3d, and publishes the fused pose plus intermediate odometry.", "NDT pose + Gyro twist + /initialpose3d", "/localization/pose_with_covariance\npose_twist_fusion_filter/kinematic_state", "autoware_ekf_localizer"],
+      "stop-filter": ["active", "Stop Filter", "Official Autoware", "Stabilizes the stopped-state velocity in EKF odometry and publishes the final kinematic state.", "EKF intermediate odometry + twist", "/localization/kinematic_state", "autoware_stop_filter"],
+      "c32": ["active", "Leishen C32", "RC sensor profile", "The driver preserves C32 raw ring/time fields for adapters and mapping.", "UDP from 192.168.1.200", "/sensing/lidar/raw/pointcloud (lidar_top)", "autoracer_rc_sensor_kit_launch"],
+      "c32-adapter": ["active", "C32 pointcloud adapter", "Project shared", "Converts the C32 field layout to Autoware PointXYZIRC without making the filtered visualization topic the NDT default.", "/sensing/lidar/raw/pointcloud", "/sensing/lidar/concatenated/pointcloud", "src/autoracer_sensing"],
+      "imu": ["active", "Hipnuc IMU and Madgwick", "RC sensor profile", "Publishes raw IMU and a filtered official IMU topic using sensor-kit calibration.", "serial IMU", "/sensing/imu/imu_data_raw\n/sensing/imu/imu_data", "autoracer_rc_sensor_kit_launch"],
+      "manual-init": ["active", "Manual initial pose", "Official AD API", "The operator provides a local seed; official initialization forwards /initialpose through AD API to /initialpose3d.", "/initialpose", "/api/localization/initialize -> /initialpose3d", "RViz plugins + autoware_adapi_adaptors"],
+      "trajectory-follower": ["active", "Trajectory follower", "Official Autoware", "Computes lateral and longitudinal control from the trajectory and current vehicle state.", "/planning/trajectory + kinematic state + steering", "/control/trajectory_follower/control_cmd", "autoware_trajectory_follower_node"],
+      "vehicle-cmd-gate": ["active", "VehicleCmdGate", "Official Autoware", "Arbitrates autonomous, external and emergency commands according to operation state.", "trajectory-follower + operation mode + emergency", "/control/command/control_cmd", "autoware_vehicle_cmd_gate"],
+      "stm32": ["active", "STM32 chassis controller", "RC hardware", "Executes bounded UART commands and returns velocity, steering, gear and control-mode feedback.", "UART command frame", "/vehicle/status/* via rc_serial_interface", "external firmware + RC adapter contract"],
+      "x86": ["development", "x86 development workspace", "Host tooling", "Used for source work, tests and dependency-independent checks. Hardware-specific build availability is not the runtime verdict.", "repository commit", "tested source changes", "developer workstation"],
+      "mapping": ["data", "Mapping pipeline", "Project tools", "Inspects bags, runs pinned Super-LIO, applies quality gates, tiles the original map and packages Autoware assets.", "rosbag2", "publishable map directory", "tools/mapping"],
+      "orin": ["runtime", "Orin onboard runtime", "Deployment target", "ARM64 build and runtime evidence decide launch and hardware integration readiness.", "same repository commit + synced map", "live Autoware graph", "Orin workspace"],
+      "operator": ["operations", "Operator entrypoints", "Project scripts", "Thin wrappers validate field inputs, call official launch and provide controlled shutdown without hiding architecture logic.", "runtime environment", "official launch process", "scripts/rc + scripts/hooke + scripts/common"],
+      "official-module": ["default", "Official module", "Pinned upstream", "The default implementation remains selected unless a replacement is explicit and verified.", "official contract", "official contract", "src/external/autoware"],
+      "custom-algorithm": ["candidate", "Custom algorithm extension", "Project local", "A local package may replace an upstream implementation while retaining topic, message, frame, QoS and diagnostics contracts.", "same official input contract", "same official output contract", "src/autoracer_localization|planning|control"],
+      "thin-adapter": ["conditional", "Thin adapter", "Project local", "Used only when a necessary interface conversion cannot be expressed through configuration or a plugin.", "explicitly documented mismatch", "canonical official contract", "small project package; never hidden in scripts"]
+    };
+
+    const tabs = Array.from(document.querySelectorAll(".tab"));
+    const views = Array.from(document.querySelectorAll(".view"));
+    const fields = {
+      state: document.getElementById("detail-state"),
+      title: document.getElementById("detail-title"),
+      owner: document.getElementById("detail-owner"),
+      description: document.getElementById("detail-description"),
+      input: document.getElementById("detail-input"),
+      output: document.getElementById("detail-output"),
+      source: document.getElementById("detail-source")
+    };
+
+    function activateView(name) {
+      tabs.forEach((tab) => tab.setAttribute("aria-selected", String(tab.dataset.view === name)));
+      views.forEach((view) => {
+        const active = view.id === `view-${name}`;
+        view.classList.toggle("is-active", active);
+        view.hidden = !active;
+      });
+    }
+
+    function showDetail(id) {
+      const item = details[id];
+      if (!item) return;
+      [fields.state.textContent, fields.title.textContent, fields.owner.textContent,
+        fields.description.textContent, fields.input.textContent, fields.output.textContent,
+        fields.source.textContent] = item;
+    }
+
+    tabs.forEach((tab) => tab.addEventListener("click", () => activateView(tab.dataset.view)));
+    document.querySelectorAll("[data-detail-id]").forEach((node) => {
+      node.addEventListener("click", () => showDetail(node.dataset.detailId));
+    });
+  </script>
+</body>
+</html>

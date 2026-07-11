@@ -1,9 +1,9 @@
 # autoracer_hooke_sensor_kit_description
 
-Status: `disabled_placeholder`.
+Status: `pending`.
 
 This directory reserves the official Autoware sensor-kit description package
-name for the future Hooke platform. It is not runtime ready and is intentionally
+name for the target Hooke platform. It is not runtime ready and is intentionally
 kept out of colcon discovery with `COLCON_IGNORE`.
 
 Remove COLCON_IGNORE only after this directory contains real Hooke sensor

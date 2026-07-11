@@ -9,7 +9,7 @@ Usage:
 Environment:
   VEHICLE_HOST      required vehicle SSH target
   VEHICLE_BAG       required remote bag directory
-  MAPPING_DATA_DIR  default: /home/milesli/Desktop/RC/rc_mapping_data
+  MAPPING_DATA_DIR  default: <repo-parent>/rc_mapping_data
   DEST_DIR          default: ${MAPPING_DATA_DIR}/bags/raw
 
 Pulls a vehicle-side mapping bag into the workstation raw-bag archive.
@@ -29,7 +29,8 @@ fi
 
 VEHICLE_HOST="${VEHICLE_HOST:?set VEHICLE_HOST, for example user@host}"
 VEHICLE_BAG="${VEHICLE_BAG:?set VEHICLE_BAG to the remote bag directory}"
-MAPPING_DATA_DIR="${MAPPING_DATA_DIR:-/home/milesli/Desktop/RC/rc_mapping_data}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MAPPING_DATA_DIR="${MAPPING_DATA_DIR:-$(dirname "${ROOT_DIR}")/rc_mapping_data}"
 DEST_DIR="${DEST_DIR:-${MAPPING_DATA_DIR}/bags/raw}"
 
 mkdir -p "${DEST_DIR}"

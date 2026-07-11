@@ -48,10 +48,10 @@ cleanup() {
     kill -INT "$REC_PID" 2>/dev/null || true
     wait "$REC_PID" 2>/dev/null || true
   fi
+  ./scripts/rc/rc_stop.sh >/dev/null 2>&1 || true
   if [[ -n "$SENSOR_PID" ]]; then
     kill -TERM -- "-${SENSOR_PID}" 2>/dev/null || true
   fi
-  ./scripts/rc/rc_stop.sh >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 

@@ -3,7 +3,7 @@
 <package format="3">
   <name>autoracer_description</name>
   <version>0.1.0</version>
-  <description>Minimal Hooke2 vehicle description and calibrated static transforms.</description>
+  <description>Reference vehicle description and static transform assets retained for migration.</description>
   <maintainer email="autoracer@example.com">Autoracer Team</maintainer>
   <license>Apache-2.0</license>
 

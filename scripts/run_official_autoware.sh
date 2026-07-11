@@ -36,6 +36,8 @@ fi
 : "${SYSTEM_MONITOR_NET_PARAM_PATH:=}"
 : "${ENABLE_ALL_MODULES_AUTO_MODE:=false}"
 : "${GNSS_ENABLED:=false}"
+: "${RC_RUNTIME_DIR:=/tmp/autoracer_rc}"
+: "${RC_RUNTIME_STATE_FILE:=${RC_RUNTIME_DIR}/autoware.env}"
 
 ACTIVE_AUTORACER_VEHICLE_MODEL="autoracer_rc"
 ACTIVE_AUTORACER_SENSOR_MODEL="autoracer_rc_sensor_kit"
@@ -47,6 +49,47 @@ is_true() {
   esac
 }
 
+process_start_ticks() {
+  local pid="$1"
+  [[ -r "/proc/${pid}/stat" ]] || return 1
+  awk '{print $22}' "/proc/${pid}/stat"
+}
+
+runtime_state_is_live() (
+  local state_pid state_ticks current_ticks
+  state_pid="$(sed -n 's/^PID=//p' "${RC_RUNTIME_STATE_FILE}" | head -n 1)"
+  state_ticks="$(sed -n 's/^START_TICKS=//p' "${RC_RUNTIME_STATE_FILE}" | head -n 1)"
+  [[ "${state_pid}" =~ ^[0-9]+$ && "${state_ticks}" =~ ^[0-9]+$ ]] || return 1
+  current_ticks="$(process_start_ticks "${state_pid}" 2>/dev/null || true)"
+  [[ -n "${current_ticks}" && "${current_ticks}" == "${state_ticks}" ]]
+)
+
+write_runtime_state() {
+  local pid="${BASHPID}"
+  local start_ticks state_tmp
+
+  mkdir -p "${RC_RUNTIME_DIR}"
+  chmod 0700 "${RC_RUNTIME_DIR}"
+
+  if [[ -f "${RC_RUNTIME_STATE_FILE}" ]]; then
+    if runtime_state_is_live; then
+      echo "ERROR: an RC runtime is already active; stop it with ./scripts/rc/rc_stop.sh" >&2
+      exit 1
+    fi
+    rm -f "${RC_RUNTIME_STATE_FILE}"
+  fi
+
+  start_ticks="$(process_start_ticks "${pid}")"
+  state_tmp="${RC_RUNTIME_STATE_FILE}.tmp.${pid}"
+  umask 077
+  {
+    printf 'PID=%s\n' "${pid}"
+    printf 'START_TICKS=%s\n' "${start_ticks}"
+    printf 'ROOT_DIR=%s\n' "${ROOT_DIR}"
+  } >"${state_tmp}"
+  mv -f "${state_tmp}" "${RC_RUNTIME_STATE_FILE}"
+}
+
 require_active_profile_pair() {
   if [[ "${AUTORACER_VEHICLE_MODEL}" == "${ACTIVE_AUTORACER_VEHICLE_MODEL}" ]] &&
     [[ "${AUTORACER_SENSOR_MODEL}" == "${ACTIVE_AUTORACER_SENSOR_MODEL}" ]]; then
@@ -54,11 +97,11 @@ require_active_profile_pair() {
   fi
 
   cat >&2 <<EOF
-ERROR: Only the RC official profile is enabled in this branch.
+ERROR: Only the RC official profile is enabled in the current revision.
 Requested vehicle_model=${AUTORACER_VEHICLE_MODEL}
 Requested sensor_model=${AUTORACER_SENSOR_MODEL}
 
-Hooke is currently a disabled_placeholder guarded by COLCON_IGNORE. Use
+Hooke is currently pending and guarded by COLCON_IGNORE. Use
 scripts/hooke/hooke_start_autoware.sh for the Hooke handoff message until the
 real Hooke profile is complete.
 EOF
@@ -97,7 +140,7 @@ require_map_assets() {
     exit 1
   fi
 
-  local max_single_pcd_bytes="${MAX_SINGLE_PCD_BYTES:-0}"
+  local max_single_pcd_bytes="${MAX_SINGLE_PCD_BYTES:-134217728}"
   local pointcloud_bytes
   pointcloud_bytes="$(stat -c '%s' "${pointcloud_path}")"
   if (( max_single_pcd_bytes > 0 && pointcloud_bytes > max_single_pcd_bytes )); then
@@ -277,5 +320,6 @@ LAUNCH_ARGS=(
   rviz_config:="${RVIZ_CONFIG}"
 )
 
+write_runtime_state
 exec ros2 launch autoware_launch autoware.launch.xml \
   "${LAUNCH_ARGS[@]}"

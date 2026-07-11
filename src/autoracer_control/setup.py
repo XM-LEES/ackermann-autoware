@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer="Autoracer Team",
     maintainer_email="autoracer@example.com",
-    description="Pure pursuit controller for closed-track Autoracer driving.",
+    description="Candidate control algorithms for Ackermann Autoware platforms.",
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
@@ -23,4 +23,3 @@ setup(
         ],
     },
 )
-

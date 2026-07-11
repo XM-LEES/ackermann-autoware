@@ -1,9 +1,9 @@
 # autoracer_hooke_launch
 
-Status: `disabled_placeholder`.
+Status: `pending`.
 
 This directory reserves the official Autoware vehicle launch package name for
-the future Hooke platform. It is not runtime ready and is intentionally kept out
+the target Hooke platform. It is not runtime ready and is intentionally kept out
 of colcon discovery with `COLCON_IGNORE`.
 
 Remove COLCON_IGNORE only after this directory contains the real Hooke vehicle

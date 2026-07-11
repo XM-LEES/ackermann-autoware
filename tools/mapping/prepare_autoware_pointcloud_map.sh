@@ -4,8 +4,10 @@ set -euo pipefail
 RUN_ID="${1:?usage: prepare_autoware_pointcloud_map.sh <run_id> <map_name> [lanelet2_map.osm]}"
 MAP_NAME="${2:?usage: prepare_autoware_pointcloud_map.sh <run_id> <map_name> [lanelet2_map.osm]}"
 LANELET2_MAP="${3:-}"
-MAPPING_WS="${MAPPING_WS:-/home/milesli/Desktop/RC/rc_mapping_ws}"
-MAPPING_DATA_DIR="${MAPPING_DATA_DIR:-/home/milesli/Desktop/RC/rc_mapping_data}"
+TOOL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${TOOL_DIR}/../.." && pwd)"
+MAPPING_WS="${MAPPING_WS:-$(dirname "${REPO_ROOT}")/rc_mapping_ws}"
+MAPPING_DATA_DIR="${MAPPING_DATA_DIR:-$(dirname "${REPO_ROOT}")/rc_mapping_data}"
 SOURCE_PCD="${SOURCE_PCD:-${MAPPING_DATA_DIR}/runs/${RUN_ID}/map/map.pcd}"
 OUTPUT_ROOT="${MAPPING_DATA_DIR}/autoware_maps"
 OUTPUT_DIR="${OUTPUT_ROOT}/${MAP_NAME}"
@@ -34,7 +36,7 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
-"$(dirname "${BASH_SOURCE[0]}")/audit_pointcloud_map.py" "${SOURCE_PCD}" \
+"${TOOL_DIR}/audit_pointcloud_map.py" "${SOURCE_PCD}" \
   --output "${quality_report}" \
   --max-ground-tilt-deg "${MAX_GROUND_TILT_DEG:-3.0}" \
   --min-ground-fraction "${MIN_GROUND_FRACTION:-0.15}" >/dev/null
@@ -63,7 +65,7 @@ find "${STAGING_DIR}/pointcloud_map.pcd" -type f -name '*.pcd' -print -quit | gr
   echo "ERROR: divided PCD tiles were not generated." >&2
   exit 1
 }
-"$(dirname "${BASH_SOURCE[0]}")/validate_pointcloud_metadata.py" "${STAGING_DIR}"
+"${TOOL_DIR}/validate_pointcloud_metadata.py" "${STAGING_DIR}"
 printf 'projector_type: Local\n' > "${STAGING_DIR}/map_projector_info.yaml"
 install -m 0644 "${quality_report}" "${STAGING_DIR}/quality_report.json"
 if [[ -n "${LANELET2_MAP}" ]]; then

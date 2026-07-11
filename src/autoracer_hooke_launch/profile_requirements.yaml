@@ -1,4 +1,4 @@
-status: disabled_placeholder
+status: pending
 vehicle_model: autoracer_hooke
 sensor_model: autoracer_hooke_sensor_kit
 package_name: autoracer_hooke_launch

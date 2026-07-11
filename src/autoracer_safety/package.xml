@@ -3,7 +3,7 @@
 <package format="3">
   <name>autoracer_safety</name>
   <version>0.1.0</version>
-  <description>Final command gate and limits before Hooke2 vehicle output.</description>
+  <description>Platform-independent final safety gate before chassis adapters.</description>
   <maintainer email="autoracer@example.com">Autoracer Team</maintainer>
   <license>Apache-2.0</license>
 
@@ -22,4 +22,3 @@
     <build_type>ament_python</build_type>
   </export>
 </package>
-

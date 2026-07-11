@@ -2,7 +2,8 @@
 set -euo pipefail
 
 TOOL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MAPPING_WS="${MAPPING_WS:-/home/milesli/Desktop/RC/rc_mapping_ws}"
+REPO_ROOT="$(cd "${TOOL_DIR}/../.." && pwd)"
+MAPPING_WS="${MAPPING_WS:-$(dirname "${REPO_ROOT}")/rc_mapping_ws}"
 ROS_DISTRO="${ROS_DISTRO:-humble}"
 LIVOX_SDK_PREFIX="${MAPPING_WS}/third_party/livox_sdk2_install"
 
