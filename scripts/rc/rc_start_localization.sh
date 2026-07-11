@@ -13,8 +13,9 @@ Environment:
   MAP_PATH       required map directory
   LAUNCH_RVIZ    default: true
 
-Starts official sensing + map + localization only. Planning, perception,
-control, API, and vehicle interface are disabled for PCD/localization checks.
+Starts official sensing + map + localization plus the official API/RViz
+initial-pose adaptor. Planning, perception, control, and vehicle interface are
+disabled for PCD/localization checks.
 EOF
 }
 
@@ -46,7 +47,7 @@ export LAUNCH_LOCALIZATION="${LAUNCH_LOCALIZATION:-true}"
 export LAUNCH_PERCEPTION="${LAUNCH_PERCEPTION:-false}"
 export LAUNCH_PLANNING=false
 export LAUNCH_CONTROL=false
-export LAUNCH_API=false
+export LAUNCH_API="${LAUNCH_API:-true}"
 export LAUNCH_RVIZ="${LAUNCH_RVIZ:-true}"
 export ENABLE_DRIVE_COMMANDS="${ENABLE_DRIVE_COMMANDS:-false}"
 

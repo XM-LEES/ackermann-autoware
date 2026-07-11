@@ -1,0 +1,54 @@
+/**:
+  ros__parameters:
+    lio.map.save_map: true
+    lio.map.if_filter: false
+    lio.map.save_map_dir: "map"
+    lio.map.map_name: "map.pcd"
+    lio.map.ds_size: 0.3
+    lio.map.save_interval: 500
+
+    # The runner selects current or legacy bag topics and overrides these.
+    lio.ros.lidar_topic: "/sensing/lidar/raw/pointcloud"
+    lio.ros.imu_topic: "/sensing/imu/imu_data"
+
+    # Super-LIO enum: MID360=1, HESAI16=2, VELO16=3, VELO32=4.
+    lio.sensor.lidar_type: 4
+    lio.sensor.blind: 0.3
+    lio.sensor.maxrange: 150.0
+    lio.sensor.filter_rate: 3
+    lio.sensor.enable_downsample: true
+    lio.sensor.voxel_fliter_size: 0.5
+    lio.sensor.gravity_norm: 9.7946
+    lio.sensor.imu_type: 1
+    lio.sensor.imu_na: 0.1
+    lio.sensor.imu_ng: 0.1
+    lio.sensor.imu_nba: 0.0001
+    lio.sensor.imu_nbg: 0.0001
+
+    # Translation followed by a column-major rotation matrix. Super-LIO at the
+    # pinned commit constructs Eigen::Matrix3 directly from this flat payload.
+    # Values come from the RC static LiDAR/IMU calibration on 2026-07-10 and
+    # must remain consistent with the RC sensor-kit profile.
+    lio.extrinsic.lidar_imu: [0.24, 0.0, 0.39,
+                              -0.000780538878, -0.999620475029, 0.027537186908,
+                               0.999908108049, -0.001152856946, -0.013507271327,
+                               0.013533891418, 0.027524113511, 0.999529517803]
+    lio.extrinsic.odom_robo: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    lio.hash_map.hash_capacity: 100000000
+    lio.hash_map.vox_resolution: 0.5
+
+    lio.kf.kf_type: 0
+    lio.kf.kf_max_iterations: 4
+    lio.kf.kf_align_gravity: true
+    lio.kf.kf_quit_eps: 0.001
+
+    lio.output.robot: false
+    lio.output.plan_env_world: false
+    lio.output.plan_env_body: false
+    lio.output.planner: false
+    lio.output.map: true
+    lio.output.dense: true
+    lio.output.pub_step: 10
+
+    lio.eva.timer: true

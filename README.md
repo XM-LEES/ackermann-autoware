@@ -47,6 +47,7 @@ and add field checks, runtime defaults, and controlled shutdown.
 ```text
 autoracer.repos             Dependency manifest for selected external packages.
 defaults.env                Runtime defaults shared by operator wrappers.
+config/middleware/          Versioned middleware configuration for onboard runtime.
 docs/                       Current architecture, development, operation, and reference docs.
 docs/architecture/          Direct-open node/topic/dataflow architecture views.
 maps/                       Local map directory placeholder.
@@ -54,6 +55,8 @@ scripts/                    Import, build, run, and smoke-test helpers.
 scripts/common/             Shared helper boundary; no vehicle-specific facts.
 scripts/rc/                 RC operator entrypoints.
 scripts/hooke/              Hooke handoff entrypoints; fail fast until the profile is enabled.
+tools/mapping/              Versioned x86 bag inspection, Super-LIO, and map preparation tools.
+tools/system/               Reproducible onboard host-service provisioning.
 src/external/autoware       Pinned upstream Autoware packages; keep patches explicit.
 src/autoracer_rc_*          RC vehicle and sensor-kit profiles.
 src/autoracer_hooke_*       Hooke vehicle and sensor-kit profile placeholders.
@@ -125,6 +128,13 @@ On resource-constrained onboard compute:
 COLCON_PARALLEL_WORKERS=1 MAKEFLAGS="-j2 -l2" ./scripts/build_minimal.sh
 ```
 
+After the onboard workspace is built, apply the Autoware DDS kernel settings,
+CycloneDDS prerequisites, and privileged system-monitor reader:
+
+```bash
+sudo -E ./tools/system/configure_onboard_host.sh
+```
+
 ## Runtime Contract
 
 The platform side must preserve these shared Autoware surfaces:
@@ -149,27 +159,24 @@ architecture facts. Pass them through environment variables such as `MAP_PATH`,
 
 ## RC Startup
 
-Map/replay checks without the chassis adapter:
+Copy-paste operator commands are maintained in
+`docs/operations/rc_runbook_zh.md`. Use that runbook as the source of truth for
+localization-only, full-chain dry-run, and low-speed drive-enabled startup.
+
+Minimal full-chain dry-run entry point:
 
 ```bash
-MAP_PATH=/path/to/map LAUNCH_VEHICLE_INTERFACE=false ./scripts/rc/rc_start_autoware.sh
-```
-
-Full RC startup with RViz on a machine attached to a display:
-
-```bash
-MAP_PATH=/path/to/map \
+MAP_PATH=/path/to/autoware_map \
 SERIAL_PORT=/dev/ttyCH343USB0 \
-LAUNCH_RVIZ=true \
 ENABLE_DRIVE_COMMANDS=false \
 ./scripts/rc/rc_start_autoware.sh
 ```
 
-Low-speed run after TF, localization, steering direction, velocity sign, stop
-behavior, and takeover behavior are verified:
+Low-speed drive-enabled startup is allowed only after TF, localization, steering
+direction, velocity sign, stop behavior, and takeover behavior are verified:
 
 ```bash
-MAP_PATH=/path/to/map \
+MAP_PATH=/path/to/autoware_map \
 SERIAL_PORT=/dev/ttyCH343USB0 \
 ENABLE_DRIVE_COMMANDS=true \
 ./scripts/rc/rc_start_autoware.sh

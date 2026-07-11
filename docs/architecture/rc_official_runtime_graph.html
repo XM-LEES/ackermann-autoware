@@ -250,7 +250,8 @@
 
         <g class="node sensing" id="points">
           <rect x="548" y="254" width="176" height="40"></rect>
-          <text x="570" y="279">/sensing/lidar/...</text>
+          <text x="570" y="274">C32 adapter</text>
+          <text class="detail" x="570" y="290">raw to PointXYZIRC</text>
         </g>
 
         <g class="node localization" id="map">
@@ -261,8 +262,8 @@
 
         <g class="node localization" id="seed">
           <rect x="812" y="164" width="184" height="50"></rect>
-          <text x="834" y="188">/initialpose</text>
-          <text class="detail" x="834" y="206">manual NDT seed</text>
+          <text x="834" y="188">/initialpose -> API</text>
+          <text class="detail" x="834" y="206">pose init /initialpose3d</text>
         </g>
 
         <g class="node localization" id="ndt">
@@ -325,7 +326,7 @@
 
         <path class="edge" d="M636 156 V254"></path>
         <path class="edge" d="M724 274 H812"></path>
-        <text class="edge-label" x="724" y="264">pointcloud</text>
+        <text class="edge-label" x="724" y="264">/sensing/lidar/concatenated</text>
 
         <path class="edge inspect" d="M724 205 C770 205 770 248 812 248"></path>
         <text class="edge-label" x="732" y="218">IMU</text>

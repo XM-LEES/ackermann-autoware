@@ -19,6 +19,7 @@ setup(
     entry_points={
         "console_scripts": [
             "rc_serial_interface = autoracer_vehicle_interface.rc_serial_interface:main",
+            "vehicle_velocity_converter = autoracer_vehicle_interface.vehicle_velocity_converter:main",
         ],
     },
 )

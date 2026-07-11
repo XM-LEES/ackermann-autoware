@@ -1,0 +1,25 @@
+repositories:
+  src/Super-LIO:
+    type: git
+    url: https://github.com/Liansheng-Wang/Super-LIO.git
+    version: 42a61372e02feaf656f84cdf3b5b793ff06d7ed4
+
+  src/livox_ros_driver2:
+    type: git
+    url: https://github.com/Livox-SDK/livox_ros_driver2.git
+    version: 13eb05e4e6dd7a765b934d0c5fd6236676a57b49
+
+  src/autoware_tools:
+    type: git
+    url: https://github.com/autowarefoundation/autoware_tools.git
+    version: 2b5e7ed4c4a6e7a93f7aa4f46d6c75359c9e9b26
+
+  src/autoware_cmake:
+    type: git
+    url: https://github.com/autowarefoundation/autoware_cmake.git
+    version: 0e0794e034fe1b8fea6e3a0bbcb9d9b8cdba03ad
+
+  third_party/Livox-SDK2:
+    type: git
+    url: https://github.com/Livox-SDK/Livox-SDK2.git
+    version: f5d9375f84efe2b15bc0a052d3e18482ed13adf4

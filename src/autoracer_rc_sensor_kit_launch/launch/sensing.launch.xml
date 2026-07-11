@@ -13,6 +13,12 @@
       <param from="$(find-pkg-share autoracer_rc_sensor_kit_launch)/config/lslidar_cx.yaml"/>
     </node>
 
+    <node pkg="autoracer_sensing" exec="c32_pointcloud_adapter" name="c32_pointcloud_adapter" output="screen">
+      <param name="input_topic" value="/sensing/lidar/raw/pointcloud"/>
+      <param name="output_topic" value="/sensing/lidar/concatenated/pointcloud"/>
+      <param name="default_return_type" value="1"/>
+    </node>
+
     <node pkg="autoracer_sensing" exec="pointcloud_voxel_filter" name="pointcloud_voxel_filter" output="screen" if="$(var launch_pointcloud_filter)">
       <param name="input_topic" value="/sensing/lidar/concatenated/pointcloud"/>
       <param name="output_topic" value="/sensing/lidar/filtered/pointcloud"/>

@@ -1,6 +1,7 @@
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import PointCloud2, PointField
 
 
@@ -116,10 +117,13 @@ class PointCloudVoxelFilter(Node):
         self._frames = 0
 
         self._pub = self.create_publisher(
-            PointCloud2, self.get_parameter("output_topic").value, 10
+            PointCloud2, self.get_parameter("output_topic").value, qos_profile_sensor_data
         )
         self.create_subscription(
-            PointCloud2, self.get_parameter("input_topic").value, self._on_cloud, 10
+            PointCloud2,
+            self.get_parameter("input_topic").value,
+            self._on_cloud,
+            qos_profile_sensor_data,
         )
         self.get_logger().info(
             "Filtering pointcloud %s -> %s leaf=%.3f max_points=%d"

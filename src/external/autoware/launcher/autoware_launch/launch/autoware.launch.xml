@@ -25,6 +25,8 @@
   <arg name="launch_api" default="true" description="launch api"/>
   <!-- Global parameters -->
   <arg name="use_sim_time" default="false" description="use_sim_time"/>
+  <!-- Localization -->
+  <arg name="gnss_enabled" default="true" description="gnss availability for initial position estimation"/>
   <!-- Vehicle -->
   <arg name="vehicle_id" default="$(env VEHICLE_ID default)" description="vehicle specific ID"/>
   <arg name="launch_vehicle_interface" default="true" description="launch vehicle interface"/>
@@ -36,6 +38,7 @@
   <!-- System -->
   <arg name="system_run_mode" default="online" description="run mode in system"/>
   <arg name="launch_system_monitor" default="true" description="launch system monitor"/>
+  <arg name="system_monitor_net_monitor_param_path" default="$(find-pkg-share autoware_launch)/config/system/system_monitor/net_monitor.param.yaml" description="net monitor parameter path"/>
   <arg name="launch_dummy_diag_publisher" default="false" description="launch dummy diag publisher"/>
   <arg name="diagnostic_graph_aggregator_graph_path" default="$(find-pkg-share autoware_launch)/config/system/diagnostics/autoware-main.yaml" description="diagnostic graph config"/>
   <!-- Tools -->
@@ -78,7 +81,9 @@
 
   <!-- System -->
   <group if="$(var launch_system)">
-    <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_system_component.launch.xml"/>
+    <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_system_component.launch.xml">
+      <arg name="system_monitor_net_monitor_param_path" value="$(var system_monitor_net_monitor_param_path)"/>
+    </include>
   </group>
 
   <!-- Map -->
@@ -95,7 +100,9 @@
 
   <!-- Localization -->
   <group if="$(var launch_localization)">
-    <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_localization_component.launch.xml"/>
+    <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_localization_component.launch.xml">
+      <arg name="gnss_enabled" value="$(var gnss_enabled)"/>
+    </include>
   </group>
 
   <!-- Perception -->

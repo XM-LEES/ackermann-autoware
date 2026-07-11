@@ -103,6 +103,7 @@ layout document.
 The shared stack boundary is the same for every platform profile:
 
 ```text
+/sensing/lidar/raw/pointcloud
 /sensing/lidar/concatenated/pointcloud
 /sensing/imu/imu_data
 /localization/pose_with_covariance
@@ -129,6 +130,7 @@ Adapter responsibilities:
 
 - Consume `/autoracer/control/safe_control_cmd` as the adapter-facing command.
 - Publish `/vehicle/status/velocity_status`, `/vehicle/status/steering_status`, `/vehicle/status/gear_status`, and `/vehicle/status/control_mode`.
+- Convert `/vehicle/status/velocity_status` to `/sensing/vehicle_velocity_converter/twist_with_covariance` for official localization stopped-check and gyro odometer consumers.
 - Preserve Autoware units and frame semantics.
 - Keep CAN/UART/byte protocol details inside the adapter.
 
@@ -185,16 +187,19 @@ flowchart LR
 flowchart LR
   subgraph R_Sensing["RC sensing / profile"]
     R_Lidar["Leishen C32\nlslidar_driver"]
+    R_C32Adapter["c32_pointcloud_adapter\nPointXYZIRC"]
     R_Imu["Hipnuc / N300 Pro\nimu_filter_madgwick"]
     R_SeedSrc["RViz / ROS /initialpose"]
+    R_Adapi["official RViz adaptor\nAD API initialize"]
     R_Map["Autoware map\nPCD + Lanelet2 + projector"]
   end
 
   subgraph R_Localization["Localization"]
     R_PC["/sensing/lidar/concatenated/pointcloud"]
+    R_RawPC["/sensing/lidar/raw/pointcloud"]
     R_Filter["pointcloud_voxel_filter\n/sensing/lidar/filtered/pointcloud"]
     R_ImuTopic["/sensing/imu/imu_data_raw\n/sensing/imu/imu_data"]
-    R_Seed["manual_seed_pose_publisher\n/localization/fixposition/seed_pose"]
+    R_Seed["pose_initializer\n/initialpose3d"]
     R_NDT["autoware_ndt_scan_matcher"]
     R_Pose["/localization/pose_with_covariance"]
     R_State["/localization/kinematic_state"]
@@ -216,10 +221,12 @@ flowchart LR
     R_Status["/vehicle/status/*"]
   end
 
-  R_Lidar --> R_PC --> R_Filter --> R_NDT
+  R_Lidar --> R_RawPC --> R_C32Adapter --> R_PC
+  R_PC --> R_Filter
+  R_PC --> R_NDT
   R_Imu --> R_ImuTopic
   R_ImuTopic -.-> R_NDT
-  R_SeedSrc --> R_Seed --> R_NDT
+  R_SeedSrc --> R_Adapi --> R_Seed --> R_NDT
   R_Map --> R_NDT
   R_NDT --> R_Pose --> Planner2 --> Traj2 --> Ctrl2 --> Cmd2 --> Gate2 --> Safe2
   R_NDT --> R_State --> Planner2

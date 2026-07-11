@@ -15,7 +15,7 @@
     distance_unit: 0.4
     horizontal_angle_resolution: 0.18
     frame_id: lidar_top
-    topic_name: /sensing/lidar/concatenated/pointcloud
+    topic_name: /sensing/lidar/raw/pointcloud
     publish_scan: false
     scan_num: 16
     coordinate_opt: false

@@ -28,4 +28,9 @@
     <param name="start_in_autonomous" value="$(var initial_engage_state)"/>
     <param name="control_topic" value="$(var safe_control_topic)"/>
   </node>
+
+  <node pkg="autoracer_vehicle_interface" exec="vehicle_velocity_converter" name="vehicle_velocity_converter" namespace="sensing" output="screen">
+    <param name="input_topic" value="/vehicle/status/velocity_status"/>
+    <param name="output_topic" value="/sensing/vehicle_velocity_converter/twist_with_covariance"/>
+  </node>
 </launch>

@@ -87,6 +87,27 @@ if [[ "${AUTORACER_SOURCE_LOCAL_SETUP:-true}" == "true" ]]; then
   fi
 fi
 
+if [[ -z "${RMW_IMPLEMENTATION:-}" ]]; then
+  AUTORACER_DEFAULT_RMW="${AUTORACER_DEFAULT_RMW:-rmw_cyclonedds_cpp}"
+  if [[ -n "${AUTORACER_DEFAULT_RMW}" ]]; then
+    if [[ -d "/opt/ros/${ROS_DISTRO_NAME}/share/${AUTORACER_DEFAULT_RMW}" ]]; then
+      export RMW_IMPLEMENTATION="${AUTORACER_DEFAULT_RMW}"
+    else
+      echo "[autoracer-env] ${AUTORACER_DEFAULT_RMW} is not installed; using ROS default RMW." >&2
+    fi
+  fi
+fi
+
+if [[ "${RMW_IMPLEMENTATION:-}" == "rmw_cyclonedds_cpp" && -z "${CYCLONEDDS_URI:-}" ]]; then
+  AUTORACER_CYCLONEDDS_CONFIG="${AUTORACER_CYCLONEDDS_CONFIG:-${ROOT_DIR}/config/middleware/cyclonedds.xml}"
+  if [[ -f "${AUTORACER_CYCLONEDDS_CONFIG}" ]]; then
+    export CYCLONEDDS_URI="file://${AUTORACER_CYCLONEDDS_CONFIG}"
+  else
+    echo "[autoracer-env] Missing CycloneDDS config: ${AUTORACER_CYCLONEDDS_CONFIG}" >&2
+    return 1
+  fi
+fi
+
 if [[ "${AUTORACER_FORBID_OLD_UNDERLAY:-true}" == "true" ]]; then
   old_repo="${AUTORACER_OLD_REPO:-/home/corage/workspace/project/pilot-auto.x1}"
   for var_name in AMENT_PREFIX_PATH CMAKE_PREFIX_PATH COLCON_PREFIX_PATH LD_LIBRARY_PATH PYTHONPATH; do

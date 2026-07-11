@@ -41,6 +41,7 @@ INCLUDE_MAPPING_DIAGNOSTICS="${INCLUDE_MAPPING_DIAGNOSTICS:-false}"
 BAG_DISCOVERY_POLL_MS="${BAG_DISCOVERY_POLL_MS:-100}"
 
 topics=(
+  /sensing/lidar/raw/pointcloud
   /sensing/lidar/concatenated/pointcloud
   /sensing/lidar/filtered/pointcloud
   /sensing/imu/imu_data_raw

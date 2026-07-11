@@ -23,19 +23,25 @@ if [[ $# -gt 0 ]]; then
 fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CURRENT_UID="$(id -u)"
+
+graceful_patterns=(
+  "[r]os2 launch autoware_launch autoware.launch.xml"
+  "[r]os2 bag record"
+)
 
 patterns=(
   "[r]os2 launch autoware_launch autoware.launch.xml"
   "[r]un_official_autoware.sh"
   "${ROOT_DIR}/install/[a]utoware_"
-  "[t]opic_tools/relay"
+  "topic_tools/relay"
   "[r]viz2"
   "[r]obot_state_publisher"
   "[s]tatic_transform_publisher"
-  "[c]omponent_container"
-  "[c]omponent_container_mt"
-  "[p]ointcloud_container"
+  "component_container"
+  "pointcloud_container"
   "[l]slidar_driver_node"
+  "c32_pointcloud_adapter"
   "[p]ointcloud_voxel_filter"
   "[h]ipnuc_imu/lib/hipnuc_imu/talker"
   "[I]MU_publisher"
@@ -51,17 +57,76 @@ patterns=(
   "[a]utoware_map_projection_loader_node"
   "[l]anelet_route_planner"
   "[p]ure_pursuit_controller"
+  "${ROOT_DIR}/install/[a]utoracer_safety/"
+  "${ROOT_DIR}/install/[a]utoracer_vehicle_interface/"
+  "${ROOT_DIR}/install/[a]utoracer_sensing/"
   "[c]ommand_gate"
   "[r]c_serial_interface"
   "[r]os2 bag record"
 )
 
-for pattern in "${patterns[@]}"; do
-  pkill -TERM -f "$pattern" 2>/dev/null || true
+any_pattern_running() {
+  local pattern
+  for pattern in "$@"; do
+    if pgrep -u "${CURRENT_UID}" -f "${pattern}" >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+wait_for_patterns() {
+  local timeout_sec="$1"
+  shift
+  local ticks=$((timeout_sec * 5))
+  local tick
+  for ((tick=0; tick<ticks; tick++)); do
+    any_pattern_running "$@" || return 0
+    sleep 0.2
+  done
+  return 1
+}
+
+graceful_requested=false
+for pattern in "${graceful_patterns[@]}"; do
+  if pgrep -u "${CURRENT_UID}" -f "${pattern}" >/dev/null 2>&1; then
+    pkill -INT -u "${CURRENT_UID}" -f "${pattern}" 2>/dev/null || true
+    graceful_requested=true
+  fi
 done
 
-sleep "${STOP_WAIT_SEC:-1}"
+if [[ "${graceful_requested}" == "true" ]]; then
+  if ! wait_for_patterns "${INTERRUPT_GRACE_SEC:-10}" "${graceful_patterns[@]}"; then
+    echo "[rc-stop] top-level launch is still active after SIGINT; sending SIGTERM"
+    for pattern in "${graceful_patterns[@]}"; do
+      pkill -TERM -u "${CURRENT_UID}" -f "${pattern}" 2>/dev/null || true
+    done
+  fi
+  if ! wait_for_patterns "${SHUTDOWN_GRACE_SEC:-20}" "${patterns[@]}"; then
+    echo "[rc-stop] graceful shutdown timed out; terminating residual processes"
+  fi
+fi
 
-ps -eo pid,comm,args |
-  grep -E "component_container|topic_tools/relay|lslidar|pointcloud|hipnuc|IMU_publisher|imu_filter|run_official_autoware|autoware.launch|autoware_|ndt|map_loader|lanelet|pure_pursuit|command_gate|rc_serial|rviz2|robot_state|rosbag" |
-  grep -v grep || true
+for pattern in "${patterns[@]}"; do
+  pkill -TERM -u "${CURRENT_UID}" -f "${pattern}" 2>/dev/null || true
+done
+
+wait_for_patterns "${STOP_WAIT_SEC:-5}" "${patterns[@]}" || true
+
+for pattern in "${patterns[@]}"; do
+  pkill -KILL -u "${CURRENT_UID}" -f "${pattern}" 2>/dev/null || true
+done
+
+sleep 0.2
+remaining="$({
+  for pattern in "${patterns[@]}"; do
+    pgrep -u "${CURRENT_UID}" -af "${pattern}" 2>/dev/null || true
+  done
+} | sort -u)"
+if [[ -n "${remaining}" ]]; then
+  echo "ERROR: RC processes remain after shutdown:" >&2
+  echo "${remaining}" >&2
+  exit 1
+fi
+
+echo "[rc-stop] RC runtime processes stopped"

@@ -215,6 +215,7 @@ def test_runtime_docs_default_to_official_planning_control_boundary():
         "自研 planning/control 候选",
         "/control/command/control_cmd",
         "/autoracer/control/safe_control_cmd",
+        "/sensing/vehicle_velocity_converter/twist_with_covariance",
         "rc_serial_interface",
         "command_gate",
     ]
@@ -243,6 +244,7 @@ def test_operations_docs_preserve_mapping_and_runtime_sequences():
         "pointcloud_map_metadata.yaml",
         "lanelet2_map.osm",
         "map_projector_info.yaml",
+        "/sensing/lidar/raw/pointcloud",
         "/sensing/lidar/concatenated/pointcloud",
         "/sensing/imu/imu_data_raw",
         "/tf_static",
@@ -251,9 +253,16 @@ def test_operations_docs_preserve_mapping_and_runtime_sequences():
         assert term in mapping
 
     runbook_terms = [
+        "可复制启动命令",
+        "不要把 localization-only 和 full-chain 连续叠加启动",
+        "/initialpose` 是 RViz 操作入口",
+        "/initialpose3d` 是 official localization 内部入口",
         "配置 LiDAR 网口",
         "启动 sensors",
         "NDT",
+        "export MAP_NAME=floor1_mapping_001",
+        "rc_start_localization.sh",
+        "rc_start_autoware.sh",
         "/planning/trajectory",
         "/control/command/control_cmd",
         "/autoracer/control/safe_control_cmd",
@@ -274,7 +283,7 @@ def test_reference_doc_combines_interfaces_and_calibration_facts():
     required_terms = [
         "## Topic 契约",
         "## LiDAR",
-        "## Fixposition 与 RC Seed",
+        "## Fixposition 与 Initial Pose",
         "## Hooke2 CAN Adapter",
         "## RC UART Adapter",
         "## RC 车辆参数",
@@ -282,6 +291,7 @@ def test_reference_doc_combines_interfaces_and_calibration_facts():
         "## 低速标定检查",
         "192.168.1.102",
         "192.168.1.200",
+        "/sensing/lidar/raw/pointcloud",
         "/sensing/lidar/concatenated/pointcloud",
         "/sensing/lidar/filtered/pointcloud",
         "/vehicle/status/velocity_status",

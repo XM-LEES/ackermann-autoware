@@ -6,9 +6,12 @@
 
 | Topic | 类型 | 生产者 | 消费者 | 语义 |
 | --- | --- | --- | --- | --- |
-| `/sensing/lidar/concatenated/pointcloud` | `sensor_msgs/msg/PointCloud2` | Hooke Hesai/Nebula 或 RC C32/lslidar | pointcloud filter、建图录包、official localization | LiDAR driver 输出，frame 为 `lidar_top`。 |
+| `/sensing/lidar/raw/pointcloud` | `sensor_msgs/msg/PointCloud2` | RC C32/lslidar | 建图录包、C32 adapter | C32 原始布局，保留 `x/y/z/intensity/ring/time`。 |
+| `/sensing/lidar/concatenated/pointcloud` | `sensor_msgs/msg/PointCloud2` | Hooke Hesai/Nebula 或 RC C32 adapter | pointcloud filter、official localization、建图录包 | official Autoware input，RC 上为 `PointXYZIRC` 布局，frame 为 `lidar_top`；不作为新 Super-LIO bag 的输入。 |
 | `/sensing/lidar/filtered/pointcloud` | `sensor_msgs/msg/PointCloud2` | `pointcloud_voxel_filter` | 建图录包、诊断、后续可选预处理输入 | 当前 official localization 默认不消费该 topic。 |
-| `/localization/fixposition/seed_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | Hooke Fixposition seed 或 RC manual seed | NDT initial pose predictor、NDT regularization input | 名字带 Fixposition，但语义是 localization seed。 |
+| `/initialpose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | RViz 2D Pose Estimate / ROS operator input | official RViz adaptor | 现场操作入口。 |
+| `/api/localization/initialize` | `autoware_adapi_v1_msgs/srv/InitializeLocalization` | official RViz adaptor | default AD API / pose initializer | API 层初始化入口。 |
+| `/initialpose3d` | `geometry_msgs/msg/PoseWithCovarianceStamped` | pose initializer | official localization reset | official localization 内部入口。 |
 | `/localization/ndt_initial_pose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | `ndt_initial_pose_predictor` | NDT scan matcher | NDT 启动/重定位初始位姿。 |
 | `/localization/pose_with_covariance` | `geometry_msgs/msg/PoseWithCovarianceStamped` | NDT scan matcher | official Autoware planning/control、gate、状态诊断 | map frame 定位输出。 |
 | `/localization/kinematic_state` | `nav_msgs/msg/Odometry` | official localization/control surface | official Autoware planning/control、诊断 | 必须使用 Autoware 单位和 frame。 |
@@ -17,13 +20,20 @@
 | `/autoracer/control/safe_control_cmd` | `autoware_control_msgs/msg/Control` | `command_gate` | RC serial adapter，未来 gated Hooke adapter | adapter-facing safe control；禁用、超时或定位丢失时为 stop。 |
 | `/control/command/gear_cmd` | `autoware_vehicle_msgs/msg/GearCommand` | `command_gate` | Hooke2 CAN adapter 或需要挡位的 vehicle adapter | 挡位命令。 |
 | `/vehicle/status/velocity_status` | `autoware_vehicle_msgs/msg/VelocityReport` | Hooke2 CAN adapter 或 RC serial adapter | localization、control | 纵向速度和 yaw rate，单位必须符合 Autoware。 |
+| `/sensing/vehicle_velocity_converter/twist_with_covariance` | `geometry_msgs/msg/TwistWithCovarianceStamped` | vehicle velocity converter | pose initializer、gyro odometer | official localization stopped-check 和 twist estimator 输入。 |
 | `/vehicle/status/steering_status` | `autoware_vehicle_msgs/msg/SteeringReport` | Hooke2 CAN adapter 或 RC serial adapter | localization、diagnostics | 前轮转角反馈。 |
 | `/vehicle/status/gear_status` | `autoware_vehicle_msgs/msg/GearReport` | Hooke2 CAN adapter 或 RC serial adapter | diagnostics、gate/adapter 检查 | 实际挡位反馈。 |
 | `/vehicle/status/control_mode` | `autoware_vehicle_msgs/msg/ControlModeReport` | Hooke2 CAN adapter 或 RC serial adapter | diagnostics、接管状态检查 | 底盘控制模式反馈。 |
 
 ## LiDAR
 
-LiDAR driver output contract:
+RC C32 raw output contract:
+
+```text
+/sensing/lidar/raw/pointcloud  sensor_msgs/msg/PointCloud2
+```
+
+Official Autoware LiDAR input contract:
 
 ```text
 /sensing/lidar/concatenated/pointcloud  sensor_msgs/msg/PointCloud2
@@ -35,17 +45,43 @@ Filtered pointcloud output for mapping bag capture and diagnosis:
 /sensing/lidar/filtered/pointcloud  sensor_msgs/msg/PointCloud2
 ```
 
-Mapping bag capture keeps both `/sensing/lidar/concatenated/pointcloud` and `/sensing/lidar/filtered/pointcloud`; offline mapping can choose either raw driver output or filtered diagnostic output. Current official localization uses the upstream default input topic, so runtime localization consumes the official default concatenated topic unless a later profile explicitly overrides it. 当前 official localization 默认消费 `/sensing/lidar/concatenated/pointcloud`。
+Mapping bag capture keeps `/sensing/lidar/raw/pointcloud`, `/sensing/lidar/concatenated/pointcloud`, and `/sensing/lidar/filtered/pointcloud`. Offline C32 mapping consumes the raw topic when it needs `ring/time`; current official localization uses the upstream default input topic, so runtime localization consumes the official default concatenated topic unless a later profile explicitly overrides it. 当前 official localization 默认消费 `/sensing/lidar/concatenated/pointcloud`。
 
 Hooke uses Hesai Pandar through `nebula_hesai`. A future Hooke deployment must provide the exact model, frame and network facts through a dedicated official sensor-kit profile.
 
-The RC official sensor-kit profile uses Leishen C32 through `lslidar_driver` with `src/autoracer_rc_sensor_kit_launch/config/lslidar_cx.yaml`: `device_ip=192.168.1.200`, `msop_port=2368`, `difop_port=2369`. It publishes directly to `/sensing/lidar/concatenated/pointcloud` in frame `lidar_top`.
+The RC official sensor-kit profile uses Leishen C32 through `lslidar_driver` with `src/autoracer_rc_sensor_kit_launch/config/lslidar_cx.yaml`: `device_ip=192.168.1.200`, `msop_port=2368`, `difop_port=2369`. The driver publishes `/sensing/lidar/raw/pointcloud` in frame `lidar_top`; `c32_pointcloud_adapter` converts that C32 layout to Autoware-compatible `PointXYZIRC` on `/sensing/lidar/concatenated/pointcloud`.
+
+## RC 传感器外参
+
+RC 外参的唯一运行配置是：
+
+```text
+src/autoracer_rc_sensor_kit_description/config/sensor_kit_calibration.yaml
+```
+
+当前 LiDAR/IMU 姿态来自 2026-07-10 的车体静止标定。标定时 IMU 约 100 Hz，
+静止加速度标准差低于 `0.007 m/s^2`；C32 近场地面拟合残差约 `0.01 m`。配置同时
+修正传感器物理安装倾角和约 `-90 deg` 的 LiDAR yaw，而不是把
+`base_link -> imu_link`、`base_link -> lidar_top` 假定为纯零姿态。
+
+Super-LIO 使用相同外参的 LiDAR-to-IMU 相对变换：
+
+```text
+tools/mapping/config/rc_c32_super_lio.yaml
+```
+
+固定版本 Super-LIO 将扁平旋转数组按 Eigen column-major 顺序读取，因此该 YAML 的
+数值排列不能按常见 row-major 方式手工改写。仓库测试会从 sensor profile 重新计算
+相对旋转，并验证 Super-LIO 实际读取的矩阵与其一致。
+
+传感器支架、IMU 或雷达位置发生变化后，必须重新静止标定并同时更新 sensor profile；
+不得只旋转最终 PCD，也不得只修改建图 YAML 来掩盖 profile 不一致。
 
 The underlying helper uses `192.168.1.102/32` on the LiDAR-facing Ethernet link and a host route to `192.168.1.200/32`, keeping the normal LAN/WiFi route separate. Hostnames, SSH identities, and operator-machine addresses are runtime environment details, not architecture constants.
 
 Do not use Nav2 `/scan` localization as an RC replacement for this point cloud contract.
 
-## Fixposition 与 RC Seed
+## Fixposition 与 Initial Pose
 
 Hooke launches the Fixposition ROS 2 driver directly as `fixposition_driver_ros2_exec`. The localization-relevant topics are:
 
@@ -59,7 +95,11 @@ Hooke launches the Fixposition ROS 2 driver directly as `fixposition_driver_ros2
 
 `/fixposition/fix` and `/fixposition/autoware_orientation` feed `autoware_gnss_poser`, which publishes `/sensing/gnss/pose_with_covariance` for NDT initialization and regularization.
 
-The RC profile disables Fixposition. RViz/ROS `/initialpose` is republished as `/localization/fixposition/seed_pose`, preserving the NDT startup contract without pretending the RC has a Fixposition device.
+The RC profile disables Fixposition. RC manual initialization follows the official Autoware path:
+RViz/ROS publishes `/initialpose`, `autoware_adapi_adaptors` calls
+`/api/localization/initialize`, and `autoware_pose_initializer` publishes
+`/initialpose3d` for official localization reset. The localization-only script keeps
+`LAUNCH_API=true` by default so this operator path matches the full-chain path.
 
 ## Hooke2 CAN Adapter
 
@@ -134,8 +174,8 @@ The only adapter added around Hooke Fixposition compatibility is `velocity_to_fi
 - `base_link -> lidar_top` measured on the active platform.
 - Hooke profile: `base_link -> gnss_base_link` measured to the Fixposition antenna reference.
 - Hooke profile: `base_link -> imu_link` or Fixposition IMU frame measured and yaw-aligned.
-- RC profile: `base_link -> lidar_top` starts from the current C32 value but must be rechecked on the car.
-- RC profile: `base_link -> imu_link` starts as zero pose for Hipnuc/N300 Pro and must be updated after physical measurement.
+- RC profile: `base_link -> lidar_top` and `base_link -> imu_link` use the measured values in `sensor_kit_calibration.yaml`.
+- RC profile: any physical sensor movement invalidates both runtime TF and Super-LIO relative extrinsics until recalibrated.
 - `map -> base_link` moves smoothly while driving slowly on the mapped track.
 
 ## 低速标定检查

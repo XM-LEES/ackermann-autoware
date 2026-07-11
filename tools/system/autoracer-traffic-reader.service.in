@@ -1,0 +1,18 @@
+[Unit]
+Description=Autoware network traffic reader
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=forking
+ExecStartPre=-/usr/bin/pkill -x traffic_reader
+ExecStartPre=/usr/bin/rm -f /tmp/traffic_reader
+ExecStart=@TRAFFIC_READER_BINARY@
+Restart=on-failure
+RestartSec=2
+TimeoutStartSec=15
+TimeoutStopSec=5
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

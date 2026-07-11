@@ -18,6 +18,7 @@ setup(
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
+            "c32_pointcloud_adapter = autoracer_sensing.c32_pointcloud_adapter:main",
             "pointcloud_voxel_filter = autoracer_sensing.pointcloud_voxel_filter:main",
             "velocity_to_fixposition_speed = autoracer_sensing.velocity_to_fixposition_speed:main",
         ],

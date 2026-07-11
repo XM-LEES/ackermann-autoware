@@ -3,13 +3,14 @@ sensor_kit_base_link:
     x: 0.0
     y: 0.0
     z: 0.0
-    roll: 0.0
-    pitch: 0.0
-    yaw: 0.0
+    # Static LiDAR/IMU leveling calibration, 2026-07-10.
+    roll: 0.004415217792
+    pitch: 0.068034594170
+    yaw: 0.000150251980
   lidar_top:
     x: 0.24
     y: 0.0
     z: 0.39
-    roll: 0.0
-    pitch: 0.0
-    yaw: -1.5708
+    roll: -0.081569052095
+    pitch: -0.023125019399
+    yaw: -1.569852618571

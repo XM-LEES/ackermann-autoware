@@ -1,84 +1,69 @@
-# RC 建图到 Autoware 回灌流程
+# RC 建图与地图发布
 
-用途：定义可重复的 RC 建图工作流：车端采集 bag，工作机用 Foxglove 检查 bag，用 Super-LIO 建图并打包 Autoware 地图，再回灌车端验证；现场需要时，也可用 Foxglove Bridge 实时查看车端 ROS 2 topic。非用途：不承载车端运行态 Autoware/RViz 配置。
+本文定义 RC 平台从车端录包到 Autoware 地图发布的标准流程。车端负责采集，x86
+工作机负责离线检查、Super-LIO 建图和点云地图预处理，Orin 只使用发布完成的地图。
+上车导航命令见 `docs/operations/rc_runbook_zh.md`；topic、frame 和外参契约见
+`docs/reference/interfaces_and_calibration_zh.md`。
 
-本文件只写建图和地图回灌流程；上车运行顺序看 `docs/operations/rc_runbook_zh.md`，topic、frame 和车辆参数看 `docs/reference/interfaces_and_calibration_zh.md`。
+## 目录边界
 
-## 工作区
-
-```text
-/home/milesli/Desktop/RC/rc_mapping_ws
-/home/milesli/Desktop/RC/rc_mapping_data
-```
-
-数据目录：
+版本库保存可复现工具和配置：
 
 ```text
-rc_mapping_data/
-  bags/raw/
-  bags/checked/
-  runs/<run_id>/
-  autoware_maps/<map_name>/
-  reports/<run_id>.md
+autoracer_hooke/tools/mapping/
+  mapping.repos
+  config/rc_c32_super_lio.yaml
+  bootstrap_mapping_ws.sh
+  inspect_bag_topics.sh
+  run_super_lio_offline.sh
+  prepare_autoware_pointcloud_map.sh
+  sync_map_to_vehicle.sh
 ```
+
+工作区和数据不属于源码：
+
+```text
+/home/milesli/Desktop/RC/rc_mapping_ws/       # 可重新构建的 x86 colcon 工作区
+/home/milesli/Desktop/RC/rc_mapping_data/
+  bags/raw/<bag_id>/                           # 原始数据，长期保留
+  runs/<run_id>/                               # 可重建的 Super-LIO 输出
+  autoware_maps/<map_name>/                    # 待标注或可发布地图
+```
+
+不要在 `rc_mapping_ws` 内维护正式脚本或配置。依赖版本由
+`tools/mapping/mapping.repos` 固定；修改建图行为时必须修改正式仓库并提交。
 
 ## 车端采集
 
-本节是上车采集 ROS bag 的操作入口。扫图过程不在工作机上完成；车端只负责启动传感器、发布 TF、录制 bag。工作机在 bag 拉回后再检查、可视化、离线建图和打包地图。
+以下命令在 Orin 的 `autoracer_hooke` 仓库根目录执行。
 
-车端进入本仓库工作区：
-
-```bash
-cd <autoracer工作区>
-```
-
-默认车端 bag 保存位置：
-
-```text
-~/autoracer_mapping_bags/<RUN_ID>/
-```
-
-这是 ROS 2 bag 目录，至少应包含：
-
-```text
-metadata.yaml
-*.db3
-```
-
-### 1. 录制前输入检查
-
-先启动传感器和静态 TF：
+### 1. 检查传感器
 
 ```bash
 IMU_SERIAL_PORT=/dev/ttyUSB0 ./scripts/rc/rc_start_sensors.sh
 ```
 
-另开一个终端，在同一个工作区检查输入：
+另开一个 SSH 会话：
 
 ```bash
+cd ~/Desktop/autoracer_hooke
 ./scripts/check_mapping_inputs.sh
 ```
 
-期望看到：
+检查项包括：
 
-```text
-[mapping-check] OK topic data: /sensing/lidar/concatenated/pointcloud
-[mapping-check] OK topic data: /sensing/imu/imu_data_raw
-[mapping-check] OK topic data: /sensing/imu/imu_data
-[mapping-check] OK topic data: /tf_static
-[mapping-check] OK pointcloud fields: x y z intensity ring time
-[mapping-check] mapping inputs look usable
-```
+- `/sensing/lidar/raw/pointcloud` 包含 `x/y/z/intensity/ring/time`。
+- `/sensing/lidar/concatenated/pointcloud` 是 Autoware `PointXYZIRC` 布局。
+- `/sensing/imu/imu_data_raw` 和 `/sensing/imu/imu_data` 持续发布。
+- `/tf_static` 包含 RC sensor profile 的 LiDAR 和 IMU 外参。
 
-检查完成后停止传感器：
+检查后停止：
 
 ```bash
 ./scripts/rc/rc_stop.sh
 ```
 
-### 2. 短 bag 试录
-
-正式扫楼层前，先录 30 到 60 秒短 bag。这个步骤用于验证 C32、IMU、TF、bag 字段和时间轴，不用于最终地图质量判断。
+### 2. 短包验证
 
 ```bash
 BAG_DURATION_SEC=60 \
@@ -87,17 +72,12 @@ IMU_SERIAL_PORT=/dev/ttyUSB0 \
 ./scripts/rc/rc_capture_mapping_bag.sh
 ```
 
-脚本会自动启动传感器、检查输入、录制、停止录制，并打印 bag 信息和路径：
+短包只验证数据契约，不作为正式地图。录制开始后车辆至少静止 3 秒，再开始运动，
+保证 Super-LIO 的初始重力估计不混入车辆加速度。
 
-```text
-[rc-capture] bag path: /home/<user>/autoracer_mapping_bags/floor_test_001
-```
+### 3. 正式录制
 
-### 3. 正式开放时长扫图
-
-正式扫图建议使用开始/停止两步命令，方便人工推车或低速人工驾驶完成完整路径。
-
-开始录制：
+开始：
 
 ```bash
 RUN_ID=floor1_mapping_001 \
@@ -105,29 +85,19 @@ IMU_SERIAL_PORT=/dev/ttyUSB0 \
 ./scripts/rc/rc_start_mapping_bag.sh
 ```
 
-开始命令会启动：
-
-- C32 LiDAR
-- Hipnuc IMU
-- 点云过滤节点
-- 静态 TF
-- ROS bag recorder
-
-不会启动 localization、planning、control、vehicle interface；`ENABLE_DRIVE_COMMANDS=false`，不会向底盘输出有效自动驾驶命令。
-
-结束录制：
+确认 recorder 已启动后保持车辆静止至少 3 秒，再低速完成路径。结束：
 
 ```bash
 ./scripts/rc/rc_stop_mapping_bag.sh
 ```
 
-结束命令会优雅停止 recorder，停止传感器栈，打印 `ros2 bag info`，并清理本次录包状态文件。
+录包链路不会启动 localization、planning、control 或 vehicle interface，且
+`ENABLE_DRIVE_COMMANDS=false`。
 
-### 4. 正式 bag 话题
-
-录包脚本会录：
+正式 bag 包含：
 
 ```text
+/sensing/lidar/raw/pointcloud
 /sensing/lidar/concatenated/pointcloud
 /sensing/lidar/filtered/pointcloud
 /sensing/imu/imu_data_raw
@@ -137,160 +107,189 @@ IMU_SERIAL_PORT=/dev/ttyUSB0 \
 /rosout
 ```
 
-后处理必须有：
+Super-LIO 优先使用保留逐点时间的 raw 点云。检查工具只对旧 bag 兼容
+`/sensing/lidar/concatenated/pointcloud` 和 `/imu/data`；新 bag 不应依赖该兼容路径。
 
-```text
-/sensing/lidar/concatenated/pointcloud
-/sensing/imu/imu_data_raw
-/sensing/imu/imu_data
-/tf_static
-/rosout
-```
+### 4. 拉回工作机
 
-`/tf` 是推荐项。有动态 TF publisher 时应存在；如果当前启动图只有静态 TF，bag 中没有 `/tf` 只作为警告处理。
-
-### 5. 把 bag 拉回工作机
-
-在工作机执行：
+在 x86 仓库根目录执行：
 
 ```bash
-cd /home/milesli/Desktop/RC/<autoracer工作区>
-
-VEHICLE_HOST=<user@vehicle-host> \
-VEHICLE_BAG=/home/<user>/autoracer_mapping_bags/floor1_mapping_001 \
+VEHICLE_HOST=wheeltec@192.168.1.135 \
+VEHICLE_BAG=/home/wheeltec/autoracer_mapping_bags/floor1_mapping_001 \
 ./scripts/pull_mapping_bag.sh
 ```
 
-拉回后默认保存到：
+默认保存到：
 
 ```text
 /home/milesli/Desktop/RC/rc_mapping_data/bags/raw/floor1_mapping_001/
 ```
 
-后续工作机检查和建图都以这个目录为输入。
+## 可选实时检查
 
-## 车端实时 Foxglove 监控
-
-实时监控用于现场查看车端正在发布的点云、IMU、TF 和诊断 topic；它不替代 ROS bag 录制，也不是 Autoware 运行界面。客户端机器只需要安装 Foxglove Studio，不需要 ROS/Autoware 环境。
-
-车端首次准备 Foxglove Bridge：
+Foxglove Bridge 只用于现场查看车端点云、IMU、TF 和 diagnostics，不替代 rosbag，
+也不是 Autoware 操作界面。传感器启动后，在 Orin 的另一终端执行：
 
 ```bash
-source /opt/ros/humble/setup.bash
-sudo apt install ros-$ROS_DISTRO-foxglove-bridge
-```
-
-启动传感器后，在车端另开终端启动 bridge：
-
-```bash
-source /opt/ros/humble/setup.bash
+cd ~/Desktop/autoracer_hooke
+source scripts/ros_env.sh
 ros2 launch foxglove_bridge foxglove_bridge_launch.xml
 ```
 
-默认会监听 `0.0.0.0:8765`。车端确认端口：
+Bridge 必须与当前 Autoware 使用相同的 RMW 和 CycloneDDS 配置；只 source
+`/opt/ros/humble/setup.bash` 会回到默认 Fast DDS，客户端虽能连接端口但看不到当前
+Autoware ROS 图。
 
-```bash
-ss -tulpen | grep 8765
-```
-
-客户端打开 Foxglove Studio，选择 Foxglove WebSocket，连接：
+客户端连接：
 
 ```text
-ws://<vehicle-ip>:8765/
+ws://<orin-ip>:8765/
 ```
 
-实际连接地址以车端 `ip -br addr` 输出为准。客户端机器只作为 Foxglove 客户端，不需要预设连接参数；也可以手动输入：
+结束时在 bridge 终端按 `Ctrl-C`；不要在正式录包过程中反复重启传感器链路。
+
+## 工作机离线建图
+
+以下命令在 x86 仓库根目录执行。
+
+### 1. 准备工具工作区
+
+```bash
+cd /home/milesli/Desktop/RC/autoracer_hooke
+./tools/mapping/bootstrap_mapping_ws.sh
+```
+
+脚本按 `mapping.repos` 固定版本准备 Super-LIO、其消息依赖和官方
+`autoware_pointcloud_divider`。它不修改 Orin 运行工作区。
+
+### 2. 检查 bag
+
+```bash
+./tools/mapping/inspect_bag_topics.sh \
+  /home/milesli/Desktop/RC/rc_mapping_data/bags/raw/floor1_mapping_001
+```
+
+检查必须通过字段类型、整帧逐点时间范围、IMU 和静态 TF。Foxglove 用于人工确认
+点云、IMU 和时间轴；它不是 Autoware 运行界面。
+
+### 3. 运行 Super-LIO
+
+```bash
+PLAYBACK_RATE=1.0 \
+./tools/mapping/run_super_lio_offline.sh \
+  /home/milesli/Desktop/RC/rc_mapping_data/bags/raw/floor1_mapping_001 \
+  floor1_mapping_001
+```
+
+输出目录：
 
 ```text
-ws://<vehicle-ip>:8765/
+rc_mapping_data/runs/floor1_mapping_001/
+  bag_inspection.txt
+  selected_topics.env
+  rc_c32_super_lio.yaml
+  super_lio_commit.txt
+  super_lio_status.txt
+  super_lio.log
+  bag_play.log
+  map/map.pcd
+  map/quality_report.json
 ```
 
-需要停止实时监控时，在运行 bridge 的终端按 `Ctrl-C`。如果 bridge 是后台启动的，先确认进程再停止：
+每次 run 使用新 ID；脚本不会覆盖已有 run。
+
+### 4. 点云质量门槛
+
+Super-LIO 脚本会自动运行平路地图质量门禁并生成
+`map/quality_report.json`。也可以独立复查：
 
 ```bash
-pgrep -af 'foxglove_bridge|ros2 launch foxglove_bridge'
+./tools/mapping/audit_pointcloud_map.py \
+  /home/milesli/Desktop/RC/rc_mapping_data/runs/floor1_mapping_001/map/map.pcd \
+  --output /tmp/floor1_mapping_001_quality.json
 ```
 
-## 工作机检查与建图
+自动门禁检查 PCD 格式、有限值、全零点、实际范围、主地面比例、主地面倾角和拟合
+残差。平路默认最大主地面倾角为 `3.0 deg`；真实坡道数据必须依据测量事实显式设置
+`MAX_GROUND_TILT_DEG`，不能为了让错误地图通过而放宽阈值。
 
-进入建图工作区：
+自动门禁通过后仍需人工检查：
+
+- 平路主地面方向与重力一致；明显整体倾斜表示外参或初始化错误。
+- 同一墙面和路缘没有持续扩散或双层重影。
+- 转弯前后结构连续，没有跳变、折叠或断层。
+- 路径终点没有随距离增长的明显高度或航向漂移。
+- `super_lio.log` 中没有字段、时间同步、NaN 或地图保存错误。
+
+静止短包只能验证流程，不能通过运动地图质量门槛。质量不通过时先修正配置并从原始
+bag 重跑，不要通过旋转最终 PCD 掩盖算法或外参错误。
+
+## Autoware 地图目录生成
+
+只有通过质量门槛的 Super-LIO PCD 才能进入该步骤：
 
 ```bash
-cd /home/milesli/Desktop/RC/rc_mapping_ws
-./bootstrap_mapping_ws.sh
+LEAF_SIZE=-0.1 GRID_SIZE=20.0 \
+./tools/mapping/prepare_autoware_pointcloud_map.sh \
+  floor1_mapping_001 \
+  floor1_mapping_001
 ```
 
-用 Foxglove 查看 ROS bag：
-
-```bash
-./view_bag_foxglove.sh /home/milesli/Desktop/RC/rc_mapping_data/bags/raw/<bag>
-```
-
-Foxglove 只属于建图工作流，用来快速查看录下来的 ROS bag 是否完整、时间轴是否连续、点云/IMU/TF 是否存在；它不是 Autoware 运行界面。没有 Foxglove CLI 时，手动打开 Foxglove Studio 并加载 bag；RViz 备用入口：
-
-```bash
-./view_bag_rviz.sh /home/milesli/Desktop/RC/rc_mapping_data/bags/raw/<bag>
-```
-
-检查一个 bag 是否满足建图输入：
-
-```bash
-./inspect_bag_topics.sh /home/milesli/Desktop/RC/rc_mapping_data/bags/raw/<bag>
-```
-
-一键检查 bag 并离线运行 Super-LIO：
-
-```bash
-./run_mapping_pipeline.sh /home/milesli/Desktop/RC/rc_mapping_data/bags/raw/<bag> <run_id>
-```
-
-带 `<map_name>` 时，pipeline 会继续打包官方 Autoware 地图目录：
-
-```bash
-./run_mapping_pipeline.sh /home/milesli/Desktop/RC/rc_mapping_data/bags/raw/<bag> <run_id> <map_name>
-```
-
-静止 bag 只用于验证流程，不代表有效导航地图。有效地图必须来自运动 bag。
-
-## Autoware 地图目录
-
-完整地图目录：
+该脚本调用官方 `autoware_pointcloud_divider`，生成：
 
 ```text
-<map_name>/
-  pointcloud_map.pcd
-  pointcloud_map_metadata.yaml
-  lanelet2_map.osm
+rc_mapping_data/autoware_maps/floor1_mapping_001/
+  pointcloud_map.pcd/              # 20 m 分块 PCD
+  pointcloud_map_metadata.yaml     # 工具按实际分块自动生成
   map_projector_info.yaml
+  quality_report.json              # 分块前原始 PCD 的自动质量报告
 ```
 
-打包完整地图：
+`LEAF_SIZE` 和 `GRID_SIZE` 的单位均为米。`LEAF_SIZE=-0.1` 表示默认不额外降采样，
+只把完整 Super-LIO PCD 切成便于动态加载的网格；只有性能数据证明完整地图无法运行时，
+才显式设置正数体素尺寸。不要手写 `pointcloud_map_metadata.yaml`。输出目录已存在时
+脚本默认拒绝覆盖。生成结束后，脚本会校验 metadata 是否完整覆盖每个 PCD 的实际
+XY 范围；全部检查通过后才把临时目录发布为正式地图。检查失败时会清理半成品，
+不产出可同步地图。
+
+## Lanelet2 标注
+
+Lanelet 必须基于最终分块前所使用的同一坐标系点云标注。不要先标旧 PCD，再替换或
+调平点云。标注完成后，将结果保存为同一地图目录中的：
+
+```text
+lanelet2_map.osm
+```
+
+完整可发布目录必须同时包含：
+
+```text
+pointcloud_map.pcd/                 # 也兼容小地图的单个 PCD 文件
+pointcloud_map_metadata.yaml
+lanelet2_map.osm
+map_projector_info.yaml
+```
+
+只有点云和 metadata 时属于 localization-only 中间产物，不能声明完整导航地图。
+
+## 同步 Orin
+
+同步脚本会在上传前检查四项地图资产：
 
 ```bash
-./package_autoware_map.sh <run_id> <map_name> /path/to/lanelet2_map.osm /path/to/map_projector_info.yaml
+VEHICLE_HOST=wheeltec@192.168.1.135 \
+./tools/mapping/sync_map_to_vehicle.sh floor1_mapping_001
 ```
 
-官方 `autoware_launch` 的 map component 会加载 `lanelet2_map.osm` 和 `map_projector_info.yaml`。只有点云地图、暂时没有 Lanelet/projector 资产时，先补齐地图资产，不在车端声明 localization-only 已可验证。
+同步脚本会在连接 Orin 前再次执行同一项 metadata 覆盖校验。校验失败的地图不会上传。
 
-## 回灌和验证
+车端路径：
 
-同步地图回车端：
-
-```bash
-VEHICLE_HOST=user@host ./sync_map_to_vehicle.sh <map_name>
+```text
+/home/wheeltec/Desktop/autoracer_hooke/maps/floor1_mapping_001
 ```
 
-验证顺序：
-
-1. 设置 `MAP_PATH=<map_dir>`。
-2. 启动 localization-only。
-3. RViz 发布 `/initialpose`。
-4. 确认 NDT pose 和 `map -> base_link` TF。
-5. 低速前再启动完整 official Autoware 链路。
-6. 底盘供电后做低速 dynamic check。
-
-## 缺口与验证口径
-
-当前缺口：有效运动 bag、有效 PCD 地图、`lanelet2_map.osm`、`map_projector_info.yaml`、C32/IMU 外参实测复核、固件协议/车身参数确认。
-
-x86 只验证脚本、建图工具、bag 检查和地图打包；ARM 车端验证传感器、NDT、共享 upper stack 和 vehicle adapter。无底盘动力阶段只验证 topic、节点状态和零速输出。
+同步后按 `docs/operations/rc_runbook_zh.md` 先做 localization-only 验证，再启动完整
+Autoware。车辆不在所选地图覆盖范围内时，不要求 NDT 收敛，也不能据此判断地图或
+软件失败；必须回到对应现场完成初始位姿、定位、目标点和低速动态验证。
