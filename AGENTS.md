@@ -16,7 +16,7 @@ Do not revive `feature/official-autoware-launch`, `rc-car-migration`, or legacy 
 ## Machine roles
 
 - The x86 workstation checkout at `/home/milesli/Desktop/RC/autoracer_hooke` is the primary development, review, mapping, and commit surface.
-- The Orin checkout at `/home/wheeltec/Desktop/work/autoracer_hooke` is the ARM deployment and hardware-validation surface.
+- The Orin checkout at `/home/wheeltec/Desktop/work/autoracer_hooke` is the future ARM deployment and hardware-validation surface. Do not use it until the x86 clean-build and CarMaker regression gates pass.
 - Do not edit `rc-platform-integration` concurrently on both machines. Device-specific Orin edits use a short-lived remote branch and return through workstation review.
 - Keep machine-specific Codex and MCP configuration under ignored `.codex/` directories. Shared context belongs in this file or tracked documentation.
 
@@ -32,7 +32,7 @@ Do not revive `feature/official-autoware-launch`, `rc-car-migration`, or legacy 
 
 - Course CSV files and their manifests are tracked under `courses/`.
 - ROS bags, PCD maps, visualization results, and generated map products stay outside Git. On Orin the deployed map root is `/home/wheeltec/Desktop/work/rc-map-assets`.
-- Build the isolated RC vendor and product workspaces outside the product source tree using `src/platform/rc/dependencies/`.
+- Resolve both platforms through `scripts/vendor/` and `dependencies/profiles/`. RC must use an explicit vendor workspace outside the product source tree; it must not own another resolver/import/build pipeline under `src/platform/rc/`.
 - Never substitute a broad legacy `/home/wheeltec/autoware` underlay for the isolated RC vendor closure.
 - The locked vendor import is currently blocked because `https://github.com/tier4/autoware_launch.x1.git` is unavailable and its pinned commit is not present in the public launcher repositories. Resolve that provenance problem explicitly before claiming a complete runtime build.
 

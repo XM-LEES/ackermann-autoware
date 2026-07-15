@@ -1,8 +1,14 @@
 # ADR: RC-owned vendor dependency isolation
 
-- Status: Accepted; supersedes the earlier accepted global-manifest selector decision
+- Status: Superseded by shared vendor profiles
 - Date: 2026-07-15
-- Applies to: RC-owned dependency metadata and tooling only
+- Applies to: Historical RC-owned dependency metadata and tooling only
+
+> This ADR is retained only to explain the rejected isolated-pipeline design. It
+> must not be implemented. The active decision is documented in
+> `docs/design/shared-vendor-profiles.md`: Hooke and RC use one resolver, importer,
+> build path, and environment model, while profiles and independent materialized
+> workspaces contain the platform differences.
 
 ## Context
 

@@ -18,12 +18,12 @@ Hooke2 / CarMaker / RC sensors
 autoracer_hooke/
   courses/                         已验证固定赛道轨迹
   maps/                            当前点云地图
-  dependencies/                    精确依赖清单、版本锁和最小补丁
+  dependencies/                    固定源码目录、平台 profile 和最小补丁
   scripts/                         导入、构建、环境和硬件诊断脚本
   src/core/                        平台无关的定位、规划、控制和运行管理
   src/platform/hooke2/             Hooke2 CAN、车辆接口、消息和实车启动
   src/platform/rc/                 RC 传感、UART、车辆参数和薄启动组合
-  vendor_ws/                       103 个第三方 ROS 包的可再生 underlay（Git 忽略）
+  vendor_ws/                       默认 Hooke 99 包的可再生 underlay（Git 忽略）
 ```
 
 `src/core` 不依赖 CarMaker、Hooke2 或 RC 私有实现。两个平台共用同一套定位、规划、
@@ -54,18 +54,22 @@ source ./scripts/ros_env.sh
 ./scripts/import_dependencies.sh --network
 ```
 
-`dependencies/versions.lock.yaml` 固定上游提交；
+`dependencies/autoracer.repos` 是上游 URL 和提交的唯一权威来源；
+`dependencies/vendor-packages.tsv` 是 103 个可用包的目录；
+`dependencies/profiles/` 分别选择 Hooke 和 RC 闭包。
 `dependencies/patches/vehicle_cmd_gate_volatile_commands.patch` 是唯一产品所需上游补丁。
 
 产品构建通过一个显式平台选择器复用同一源码图：
 
 ```bash
-AUTORACER_PLATFORM=hooke2 ./scripts/build_product.sh
-AUTORACER_PLATFORM=rc ./scripts/build_product.sh
-AUTORACER_PLATFORM=all ./scripts/build_product.sh
+./scripts/build_product.sh
+AUTORACER_PROFILE=rc \
+AUTORACER_VENDOR_WS=/absolute/path/to/rc-vendor-ws \
+./scripts/build_product.sh
 ```
 
-默认值仍为 `hooke2`。平台选择只改变构建目标，不改变 core 源码或算法组合。
+默认 profile 为 `hooke2`。RC 必须显式选择 profile 和独立 vendor 工作区；不存在
+`all` 模式。平台选择只改变依赖闭包和产品构建目标，不改变 core 源码或算法组合。
 
 ## 运行入口
 

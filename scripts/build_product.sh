@@ -17,6 +17,11 @@ case "${PROFILE}" in
     ;;
 esac
 
+if [[ "${PROFILE}" != "hooke2" && -z "${AUTORACER_VENDOR_WS:-}" ]]; then
+  echo "AUTORACER_VENDOR_WS is required for non-Hooke profile ${PROFILE}" >&2
+  exit 2
+fi
+
 AUTORACER_SOURCE_VENDOR_SETUP=true
 AUTORACER_SOURCE_PRODUCT_SETUP=false
 # shellcheck source=scripts/ros_env.sh
