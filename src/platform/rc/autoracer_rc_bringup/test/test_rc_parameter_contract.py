@@ -52,6 +52,24 @@ def test_extrinsics_define_each_rc_sensor_once():
         assert all(math.isfinite(value) for value in values)
 
 
+def test_lidar_runtime_profile_matches_the_profile_used_to_build_rc_maps():
+    lidar = load_yaml(BRINGUP / "config/rc/lidar.param.yaml")[
+        "/cx/lslidar_driver_node"
+    ]["ros__parameters"]
+    assert lidar["coordinate_opt"] is False
+    assert lidar["angle_disable_min"] == [11000]
+    assert lidar["angle_disable_max"] == [25000]
+
+    extrinsics = load_yaml(DESCRIPTION / "config/sensor_extrinsics.yaml")["transforms"]
+    lidar_tf = next(item for item in extrinsics if item["child"] == "lidar_top")
+    assert lidar_tf["translation"] == {"x": 0.24, "y": 0.0, "z": 0.39}
+    assert lidar_tf["rotation_rpy"] == {
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": -math.pi / 2.0,
+    }
+
+
 def test_static_tf_launch_reads_the_single_extrinsics_file():
     source = (DESCRIPTION / "launch/static_tf.launch.py").read_text(encoding="utf-8")
     assert "sensor_extrinsics.yaml" in source

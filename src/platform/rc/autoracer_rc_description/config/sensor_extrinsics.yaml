@@ -1,9 +1,9 @@
-# reference_unverified: replace both transforms with physical measurements.
+# LiDAR values are the 2026-07-10 RC mapping calibration. IMU remains unverified.
 transforms:
   - parent: base_link
     child: lidar_top
-    translation: {x: 0.0, y: 0.0, z: 0.0}
-    rotation_rpy: {roll: 0.0, pitch: 0.0, yaw: 0.0}
+    translation: {x: 0.24, y: 0.0, z: 0.39}
+    rotation_rpy: {roll: 0.0, pitch: 0.0, yaw: -1.5707963267948966}
 
   - parent: base_link
     child: imu_link
