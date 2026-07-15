@@ -2,23 +2,17 @@
 set -euo pipefail
 
 PRODUCT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROFILE="${AUTORACER_PROFILE:-hooke2}"
 
-case "${AUTORACER_PLATFORM:-hooke2}" in
+case "${PROFILE}" in
   hooke2)
     PACKAGE_TARGETS=(autoracer_bringup autoracer_hooke2_bringup)
     ;;
   rc)
     PACKAGE_TARGETS=(autoracer_bringup autoracer_rc_bringup)
     ;;
-  all)
-    PACKAGE_TARGETS=(
-      autoracer_bringup
-      autoracer_hooke2_bringup
-      autoracer_rc_bringup
-    )
-    ;;
   *)
-    echo "Usage: AUTORACER_PLATFORM={hooke2|rc|all} $0" >&2
+    echo "Usage: AUTORACER_PROFILE={hooke2|rc} $0" >&2
     exit 2
     ;;
 esac

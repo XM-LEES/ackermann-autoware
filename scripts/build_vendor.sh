@@ -2,17 +2,23 @@
 set -euo pipefail
 
 PRODUCT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROFILE="${AUTORACER_PROFILE:-hooke2}"
+RESOLVER="${PRODUCT_ROOT}/scripts/vendor/resolve_dependencies.py"
 VENDOR_WS="${AUTORACER_VENDOR_WS:-${PRODUCT_ROOT}/vendor_ws}"
-PACKAGE_MANIFEST="${PRODUCT_ROOT}/dependencies/vendor-packages.tsv"
+
+if [[ "${PROFILE}" != "hooke2" && -z "${AUTORACER_VENDOR_WS:-}" ]]; then
+  echo "AUTORACER_VENDOR_WS is required for non-Hooke profile ${PROFILE}" >&2
+  exit 2
+fi
 
 AUTORACER_SOURCE_VENDOR_SETUP=false
 AUTORACER_SOURCE_PRODUCT_SETUP=false
 # shellcheck source=scripts/ros_env.sh
 source "${PRODUCT_ROOT}/scripts/ros_env.sh"
 
-mapfile -t packages < <(cut -f1 "${PACKAGE_MANIFEST}")
+mapfile -t packages < <(python3 "${RESOLVER}" --profile "${PROFILE}" --format names)
 if ((${#packages[@]} == 0)); then
-  echo "No packages listed in ${PACKAGE_MANIFEST}" >&2
+  echo "No packages resolved for profile ${PROFILE}" >&2
   exit 1
 fi
 

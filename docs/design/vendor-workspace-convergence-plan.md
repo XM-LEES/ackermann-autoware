@@ -4,7 +4,7 @@
 
 ## 1. 目标
 
-在不修改 `src/core/`、不改变已经由 CarMaker 验证的 Hooke 产品行为、暂不使用 Orin 的前提下，重新整理第三方 ROS 依赖管理：
+在本次工作不继续修改 `src/core/`、不改变已经由 CarMaker 验证的 Hooke 产品行为、暂不使用 Orin 的前提下，重新整理第三方 ROS 依赖管理：
 
 1. 保留 pilot 基线已经验证过的 Hooke 依赖集合和默认命令行为；
 2. 让 Hooke 与 RC 使用同一套依赖解析、导入、补丁、构建和环境叠加机制；
@@ -113,7 +113,7 @@ scripts/build.sh                      # Hooke 兼容入口，默认行为不变
 
 **门禁 A：**
 
-- `git diff pilot-localization-sync-20260707 -- src/core src/platform/hooke2` 为空；
+- `git diff c3ffe2d496bcb5a841bab0d3d1ed85c76d26b84f -- src/core src/platform/hooke2` 为空，证明本次 vendor 工作没有继续改动既有 Core/Hooke 产品源码；
 - Hooke profile/兼容入口解析结果严格为 pilot 的 99 包、14 仓库和原补丁；
 - 共享文件恢复不能破坏已有 RC 产品源码；
 - 回归测试先失败于当前污染，再通过于恢复后的行为。
@@ -176,7 +176,7 @@ scripts/build.sh                      # Hooke 兼容入口，默认行为不变
 - Hooke 兼容入口的默认参数、输出工作区、99 包集合和 source 顺序保持不变；
 - RC 只新增声明性 profile、硬件依赖记录和必要薄入口；
 - `git diff --check`、Python 单元测试、shell 静态检查及全部依赖合同测试通过；
-- `git diff pilot-localization-sync-20260707 -- src/core src/platform/hooke2` 仍为空。
+- `git diff c3ffe2d496bcb5a841bab0d3d1ed85c76d26b84f -- src/core src/platform/hooke2` 仍为空。
 
 ### 阶段 D：解决上游源码的可再生性
 
@@ -254,7 +254,7 @@ Orin 不属于本轮执行，但未来只有同时满足以下条件才允许开
 ## 8. 最终验收清单
 
 - [ ] `pilot-localization-sync-20260707` 仍指向 `98064d37638d1d515b5db2ffd68ba078c35df7b2`；
-- [ ] `src/core/` 与 `src/platform/hooke2/` 相对 pilot 无改动；
+- [ ] `src/core/` 与 `src/platform/hooke2/` 相对本计划的起始提交 `c3ffe2d` 无新增改动；
 - [ ] Hooke 默认入口仍解析 99 包、14 仓库和原补丁；
 - [ ] RC 包数量由固定源码依赖图生成，未写死 82；
 - [ ] Hooke 与 RC 共用唯一 resolver/import/build/environment 机制；

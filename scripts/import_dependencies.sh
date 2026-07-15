@@ -3,11 +3,16 @@ set -euo pipefail
 
 PRODUCT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT_DIR="$(dirname "${PRODUCT_ROOT}")"
+PROFILE="${AUTORACER_PROFILE:-hooke2}"
+RESOLVER="${PRODUCT_ROOT}/scripts/vendor/resolve_dependencies.py"
 VENDOR_WS="${AUTORACER_VENDOR_WS:-${PRODUCT_ROOT}/vendor_ws}"
 PILOT_REPO="${PILOT_REPO:-${ROOT_DIR}/pilot-auto.x1}"
-PACKAGE_MANIFEST="${PRODUCT_ROOT}/dependencies/vendor-packages.tsv"
-REPOSITORY_MANIFEST="${PRODUCT_ROOT}/dependencies/autoracer.repos"
 PATCH_DIR="${PRODUCT_ROOT}/dependencies/patches"
+
+if [[ "${PROFILE}" != "hooke2" && -z "${AUTORACER_VENDOR_WS:-}" ]]; then
+  echo "AUTORACER_VENDOR_WS is required for non-Hooke profile ${PROFILE}" >&2
+  exit 2
+fi
 
 mode="reuse"
 case "${1:-}" in
@@ -21,16 +26,17 @@ case "${1:-}" in
     ;;
 esac
 
-if [[ ! -s "${PACKAGE_MANIFEST}" ]]; then
-  echo "Missing package manifest: ${PACKAGE_MANIFEST}" >&2
+if ! RESOLVED_RECORDS="$(python3 "${RESOLVER}" --profile "${PROFILE}" --format records)"; then
+  echo "Unable to resolve vendor profile: ${PROFILE}" >&2
   exit 1
 fi
+[[ -n "${RESOLVED_RECORDS}" ]] || { echo "Empty vendor profile: ${PROFILE}" >&2; exit 1; }
 
 copy_curated_packages() {
   local source_root="$1"
-  local package relative_path source_dir destination_dir
+  local package relative_path repository source_dir destination_dir
 
-  while IFS=$'\t' read -r package relative_path; do
+  while IFS=$'\t' read -r package relative_path repository; do
     [[ -n "${package}" && -n "${relative_path}" ]] || continue
     source_dir="${source_root}/${relative_path}"
     destination_dir="${VENDOR_WS}/src/${relative_path}"
@@ -47,7 +53,7 @@ copy_curated_packages() {
       --exclude='COLCON_IGNORE' \
       --exclude='*.db3' \
       "${source_dir}/" "${destination_dir}/"
-  done < "${PACKAGE_MANIFEST}"
+  done <<< "${RESOLVED_RECORDS}"
 }
 
 apply_patch_once() {
@@ -70,11 +76,11 @@ verify_package_set() {
   local expected actual
   expected="$(mktemp)"
   actual="$(mktemp)"
-  cut -f1 "${PACKAGE_MANIFEST}" | sort -u > "${expected}"
+  python3 "${RESOLVER}" --profile "${PROFILE}" --format names | sort -u > "${expected}"
   colcon list --base-paths "${VENDOR_WS}/src" --names-only | sort -u > "${actual}"
   if ! diff -u "${expected}" "${actual}"; then
     rm -f "${expected}" "${actual}"
-    echo "Vendor package set differs from ${PACKAGE_MANIFEST}" >&2
+    echo "Vendor package set differs from profile ${PROFILE}" >&2
     return 1
   fi
   printf 'verified vendor package set: %s packages\n' "$(wc -l < "${actual}")"
@@ -103,7 +109,9 @@ if [[ "${mode}" == "pilot" || "${mode}" == "network" ]]; then
     temporary_checkout="$(mktemp -d)"
     trap 'rm -rf "${temporary_checkout}"' EXIT
     mkdir -p "${temporary_checkout}/src"
-    vcs import "${temporary_checkout}/src" < "${REPOSITORY_MANIFEST}"
+    python3 "${RESOLVER}" --profile "${PROFILE}" --format repositories \
+      > "${temporary_checkout}/filtered.repos"
+    vcs import "${temporary_checkout}/src" < "${temporary_checkout}/filtered.repos"
     copy_curated_packages "${temporary_checkout}/src"
   fi
 elif [[ ! -d "${VENDOR_WS}/src" ]]; then
