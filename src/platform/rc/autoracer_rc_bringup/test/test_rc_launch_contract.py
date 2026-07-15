@@ -39,7 +39,7 @@ def test_rc_race_is_only_a_composition_root():
     assert race.count("IncludeLaunchDescription(") == 3
 
 
-def test_rc_race_injects_rc_files_and_conservative_dynamics():
+def test_rc_race_injects_only_platform_owned_files_and_conservative_dynamics():
     race = source("race.launch.py")
     for argument in (
         '"use_sim_time": "false"',
@@ -48,11 +48,12 @@ def test_rc_race_injects_rc_files_and_conservative_dynamics():
         '"max_accel_mps2": "0.4"',
         '"max_decel_mps2": "-0.8"',
         '"vehicle_info_param_file"',
-        '"control_param_file"',
         '"gate_param_file"',
         '"runtime_param_file"',
     ):
         assert argument in race
+    assert '"control_param_file"' not in race
+    assert "controller.param.yaml" not in race
     assert 'DeclareLaunchArgument("localization_map_path")' in race
     assert 'DeclareLaunchArgument("course_path")' in race
 

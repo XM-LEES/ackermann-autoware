@@ -82,9 +82,6 @@ def generate_launch_description():
                     "use_sim_time": "false",
                     "system_run_mode": "online",
                     "vehicle_info_param_file": vehicle_info,
-                    "control_param_file": PathJoinSubstitution(
-                        [config, "controller.param.yaml"]
-                    ),
                     "gate_param_file": PathJoinSubstitution(
                         [config, "vehicle_cmd_gate.param.yaml"]
                     ),
