@@ -75,21 +75,27 @@ def test_zero_speed_has_zero_yaw_rate():
 
 def test_telemetry_converts_yaw_rate_back_to_steering():
     telemetry = Telemetry(True, 0.4, 0.0, 0.1, 12.0)
-    velocity, steering, gear = telemetry_to_status(telemetry, 0.1, 0.6, 0.262)
+    velocity, steering, gear = telemetry_to_status(
+        telemetry, 0.1, GEAR_DRIVE, 0.6, 0.262
+    )
     assert velocity == pytest.approx(0.4)
     assert steering == pytest.approx(math.atan(0.1 * 0.6 / 0.4))
     assert gear == GEAR_DRIVE
 
 
-def test_zero_speed_telemetry_uses_last_steering():
+def test_zero_speed_telemetry_preserves_selected_drive_gear():
     telemetry = Telemetry(True, 0.0, 0.0, 0.0, 12.0)
-    assert telemetry_to_status(telemetry, -0.1, 0.6, 0.262) == (0.0, -0.1, GEAR_NEUTRAL)
+    assert telemetry_to_status(telemetry, -0.1, GEAR_DRIVE, 0.6, 0.262) == (
+        0.0,
+        -0.1,
+        GEAR_DRIVE,
+    )
 
 
 def test_implausible_telemetry_is_rejected():
     telemetry = Telemetry(True, math.inf, 0.0, 0.0, 12.0)
     with pytest.raises(ValueError):
-        telemetry_to_status(telemetry, 0.0, 0.6, 0.262)
+        telemetry_to_status(telemetry, 0.0, GEAR_NEUTRAL, 0.6, 0.262)
 
 
 def test_stale_or_disabled_command_becomes_stop():

@@ -77,10 +77,11 @@ def command_or_stop(
 def telemetry_to_status(
     telemetry: Telemetry,
     last_steer: float,
+    selected_gear: int,
     wheelbase: float,
     max_steer: float,
 ) -> Tuple[float, float, int]:
-    """Convert firmware feedback into normalized velocity, steering, and gear."""
+    """Convert feedback while preserving the adapter's selected logical gear."""
 
     _require_positive("wheelbase", wheelbase)
     _require_positive("max_steer", max_steer)
@@ -95,12 +96,19 @@ def telemetry_to_status(
         raise ValueError("telemetry contains a non-finite value")
     if abs(telemetry.vx_mps) < 1e-6:
         steering = max(-max_steer, min(max_steer, last_steer))
-        gear = GEAR_NEUTRAL
     else:
         steering = math.atan(telemetry.wz_rad_s * wheelbase / telemetry.vx_mps)
         steering = max(-max_steer, min(max_steer, steering))
-        gear = GEAR_DRIVE if telemetry.vx_mps > 0.0 else GEAR_REVERSE
-    return telemetry.vx_mps, steering, gear
+    valid_gears = (
+        GEAR_NONE,
+        GEAR_NEUTRAL,
+        GEAR_DRIVE,
+        GEAR_REVERSE,
+        GEAR_PARK,
+        GEAR_LOW,
+    )
+    reported_gear = selected_gear if selected_gear in valid_gears else GEAR_NEUTRAL
+    return telemetry.vx_mps, steering, reported_gear
 
 
 def _create_node_class():
@@ -236,7 +244,11 @@ def _create_node_class():
 
         def _publish_status(self, telemetry):
             velocity, steering, gear = telemetry_to_status(
-                telemetry, self._last_steer, self._wheelbase, self._max_steer
+                telemetry,
+                self._last_steer,
+                self._gear,
+                self._wheelbase,
+                self._max_steer,
             )
             stamp = self.get_clock().now().to_msg()
             velocity_report = VelocityReport()
