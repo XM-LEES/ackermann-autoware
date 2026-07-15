@@ -57,8 +57,8 @@ def test_lidar_runtime_profile_matches_the_profile_used_to_build_rc_maps():
         "/cx/lslidar_driver_node"
     ]["ros__parameters"]
     assert lidar["coordinate_opt"] is False
-    assert lidar["angle_disable_min"] == [11000]
-    assert lidar["angle_disable_max"] == [25000]
+    assert lidar["angle_disable_min"] == 11000
+    assert lidar["angle_disable_max"] == 25000
 
     extrinsics = load_yaml(DESCRIPTION / "config/sensor_extrinsics.yaml")["transforms"]
     lidar_tf = next(item for item in extrinsics if item["child"] == "lidar_top")
