@@ -41,6 +41,7 @@ def generate_launch_description():
         "localization_pointcloud_container_name"
     )
     map_projector_info = PathJoinSubstitution([map_path, "map_projector_info.yaml"])
+    pointcloud_map = PathJoinSubstitution([map_path, "pointcloud_map.pcd"])
     pointcloud_metadata = PathJoinSubstitution([map_path, "pointcloud_map_metadata.yaml"])
 
     localization_launch = PathJoinSubstitution(
@@ -82,7 +83,7 @@ def generate_launch_description():
                     "enable_selected_load": False,
                     "leaf_size": 3.0,
                     "pcd_paths_or_directory": ParameterValue(
-                        [[map_path]], value_type=list[str]
+                        [[pointcloud_map]], value_type=list[str]
                     ),
                     "pcd_metadata_path": pointcloud_metadata,
                 }

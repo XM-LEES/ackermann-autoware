@@ -31,3 +31,11 @@ def test_localization_launch_does_not_own_platform_normalization():
         "topic_tools",
     ):
         assert token not in LAUNCH_SOURCE
+
+
+def test_localization_loads_tiles_from_the_shared_map_asset_directory():
+    assert 'PathJoinSubstitution([map_path, "pointcloud_map.pcd"])' in LAUNCH_SOURCE
+    parameter_start = LAUNCH_SOURCE.index('"pcd_paths_or_directory"')
+    parameter_source = LAUNCH_SOURCE[parameter_start : parameter_start + 180]
+    assert "[[pointcloud_map]]" in parameter_source
+    assert "[[map_path]]" not in parameter_source
