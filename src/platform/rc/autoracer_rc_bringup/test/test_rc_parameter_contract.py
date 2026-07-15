@@ -32,7 +32,7 @@ def test_vehicle_reference_geometry_is_explicit_and_safe():
     params = data["/**"]["ros__parameters"]
     assert params["wheel_radius"] == 0.115
     assert params["wheel_base"] == 0.600
-    assert params["wheel_tread"] == 0.440
+    assert params["wheel_tread"] == 0.470
     assert params["max_steer_angle"] == 0.262
     for name, value in params.items():
         assert math.isfinite(value), name
@@ -64,9 +64,9 @@ def test_lidar_runtime_profile_matches_the_profile_used_to_build_rc_maps():
     lidar_tf = next(item for item in extrinsics if item["child"] == "lidar_top")
     assert lidar_tf["translation"] == {"x": 0.24, "y": 0.0, "z": 0.39}
     assert lidar_tf["rotation_rpy"] == {
-        "roll": 0.0,
-        "pitch": 0.0,
-        "yaw": -math.pi / 2.0,
+        "roll": -0.081569052095,
+        "pitch": -0.023125019399,
+        "yaw": -1.569852618571,
     }
 
 

@@ -3,7 +3,7 @@ transforms:
   - parent: base_link
     child: lidar_top
     translation: {x: 0.24, y: 0.0, z: 0.39}
-    rotation_rpy: {roll: 0.0, pitch: 0.0, yaw: -1.5707963267948966}
+    rotation_rpy: {roll: -0.081569052095, pitch: -0.023125019399, yaw: -1.569852618571}
 
   - parent: base_link
     child: imu_link
