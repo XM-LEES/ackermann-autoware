@@ -76,6 +76,8 @@ def test_rc_race_opens_a_live_visualization_by_default():
         "/planning/local_trajectory_marker",
     ):
         assert topic in rviz
+    assert "rviz_default_plugins/SetInitialPose" in rviz
+    assert "/initialpose3d" in rviz
 
 
 def test_vehicle_launch_owns_only_the_uart_adapter():
