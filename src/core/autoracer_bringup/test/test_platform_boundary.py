@@ -109,6 +109,7 @@ def test_shared_race_exposes_platform_parameter_contract():
         "stopping_margin_m",
         "gnss_enabled",
         "initial_pose",
+        "publish_visualization",
     ):
         assert f'LaunchConfiguration("{argument}")' in race_source
 
@@ -124,3 +125,6 @@ def test_shared_race_exposes_platform_parameter_contract():
     for argument in ("gnss_enabled", "initial_pose"):
         assert f'LaunchConfiguration("{argument}")' in planning_source
         assert f'LaunchConfiguration("{argument}")' in localization_source
+
+    assert 'LaunchConfiguration("publish_visualization")' in planning_source
+    assert 'LaunchConfiguration("publish_visualization")' in planner_source

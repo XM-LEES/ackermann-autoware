@@ -14,6 +14,7 @@ def generate_launch_description():
     max_decel_mps2 = LaunchConfiguration("max_decel_mps2")
     command_latency_sec = LaunchConfiguration("command_latency_sec")
     stopping_margin_m = LaunchConfiguration("stopping_margin_m")
+    publish_visualization = LaunchConfiguration("publish_visualization")
 
     return LaunchDescription(
         [
@@ -25,6 +26,7 @@ def generate_launch_description():
             DeclareLaunchArgument("max_decel_mps2", default_value="-1.5"),
             DeclareLaunchArgument("command_latency_sec", default_value="0.2"),
             DeclareLaunchArgument("stopping_margin_m", default_value="5.0"),
+            DeclareLaunchArgument("publish_visualization", default_value="false"),
             SetParameter(
                 name="use_sim_time",
                 value=ParameterValue(use_sim_time, value_type=bool),
@@ -39,6 +41,10 @@ def generate_launch_description():
                         "course_path": course_path,
                         "map_path": map_path,
                         "trajectory_topic": "/planning/global_trajectory",
+                        "visualization_topic": "/planning/course_markers",
+                        "publish_visualization": ParameterValue(
+                            publish_visualization, value_type=bool
+                        ),
                     }
                 ],
             ),
@@ -75,7 +81,9 @@ def generate_launch_description():
                         "nearest_search_forward_distance_m": 3.0,
                         "nearest_search_forward_time_sec": 0.35,
                         "nearest_position_gate_m": 3.0,
-                        "publish_markers": False,
+                        "publish_markers": ParameterValue(
+                            publish_visualization, value_type=bool
+                        ),
                     }
                 ],
             ),

@@ -23,6 +23,7 @@ def generate_launch_description():
     stopping_margin_m = LaunchConfiguration("stopping_margin_m")
     gnss_enabled = LaunchConfiguration("gnss_enabled")
     initial_pose = LaunchConfiguration("initial_pose")
+    publish_visualization = LaunchConfiguration("publish_visualization")
 
     return LaunchDescription(
         [
@@ -41,6 +42,7 @@ def generate_launch_description():
             DeclareLaunchArgument("stopping_margin_m", default_value="5.0"),
             DeclareLaunchArgument("gnss_enabled", default_value="true"),
             DeclareLaunchArgument("initial_pose", default_value="[]"),
+            DeclareLaunchArgument("publish_visualization", default_value="false"),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     _launch_file(
@@ -70,6 +72,7 @@ def generate_launch_description():
                     "max_decel_mps2": max_decel_mps2,
                     "command_latency_sec": command_latency_sec,
                     "stopping_margin_m": stopping_margin_m,
+                    "publish_visualization": publish_visualization,
                 }.items(),
             ),
         ]

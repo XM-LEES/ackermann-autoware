@@ -107,6 +107,7 @@ class FixedCoursePublisher(Node):
         self.declare_parameter("map_path", "")
         self.declare_parameter("trajectory_topic", "/planning/global_trajectory")
         self.declare_parameter("visualization_topic", "")
+        self.declare_parameter("publish_visualization", False)
 
         course_path_value = str(self.get_parameter("course_path").value)
         if not course_path_value:
@@ -133,7 +134,7 @@ class FixedCoursePublisher(Node):
         visualization_topic = str(self.get_parameter("visualization_topic").value)
         self._marker_publisher = None
         self._marker_timer = None
-        if visualization_topic:
+        if bool(self.get_parameter("publish_visualization").value) and visualization_topic:
             self._marker_publisher = self.create_publisher(
                 MarkerArray, visualization_topic, qos
             )

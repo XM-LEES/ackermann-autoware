@@ -52,6 +52,7 @@ def test_rc_race_injects_only_platform_owned_files_and_conservative_dynamics():
         '"runtime_param_file"',
         '"gnss_enabled": "false"',
         '"initial_pose"',
+        '"publish_visualization": "true"',
     ):
         assert argument in race
     assert '"control_param_file"' not in race
@@ -71,8 +72,8 @@ def test_rc_race_opens_a_live_visualization_by_default():
         "/map/pointcloud_map",
         "/sensing/lidar/concatenated/pointcloud",
         "/localization/kinematic_state",
-        "/planning/global_trajectory",
-        "/planning/trajectory",
+        "/planning/course_markers",
+        "/planning/local_trajectory_marker",
     ):
         assert topic in rviz
 

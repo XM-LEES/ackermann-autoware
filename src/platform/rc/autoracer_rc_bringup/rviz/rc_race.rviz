@@ -107,52 +107,32 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /localization/kinematic_state
       Value: true
-    - Class: rviz_plugins/Trajectory
-      Color Border Vel Max: 0.5
+    - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: Recorded Course
+      Namespaces:
+        autoracer_fixed_course: true
+        autoracer_fixed_course_finish: true
+        autoracer_fixed_course_start: true
       Topic:
         Depth: 1
         Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /planning/global_trajectory
+        Value: /planning/course_markers
       Value: true
-      View Path:
-        Alpha: 0.9
-        Color: 0; 120; 255
-        Constant Color: true
-        Value: true
-        Width: 2
-      View Velocity:
-        Alpha: 0.8
-        Color: 0; 120; 255
-        Constant Color: true
-        Scale: 0.2
-        Value: false
-    - Class: rviz_plugins/Trajectory
-      Color Border Vel Max: 0.5
+    - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: Tracking Trajectory
+      Namespaces:
+        autoracer_local_trajectory: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /planning/trajectory
+        Value: /planning/local_trajectory_marker
       Value: true
-      View Path:
-        Alpha: 1
-        Color: 255; 60; 60
-        Constant Color: true
-        Value: true
-        Width: 4
-      View Velocity:
-        Alpha: 0.8
-        Color: 255; 60; 60
-        Constant Color: true
-        Scale: 0.2
-        Value: false
   Enabled: true
   Global Options:
     Background Color: 24; 26; 28

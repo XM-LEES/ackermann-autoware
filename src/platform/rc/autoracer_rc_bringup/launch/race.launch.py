@@ -49,6 +49,7 @@ def _core_race(
                 "system_run_mode": "online",
                 "gnss_enabled": "false",
                 "initial_pose": str(initial_pose),
+                "publish_visualization": "true",
                 "vehicle_info_param_file": vehicle_info,
                 "gate_param_file": PathJoinSubstitution(
                     [config, "vehicle_cmd_gate.param.yaml"]
