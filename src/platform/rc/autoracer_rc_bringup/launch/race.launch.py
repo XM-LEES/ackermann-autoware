@@ -14,15 +14,56 @@
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+)
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
+
+from autoracer_rc_adapter.course_initial_pose import load_course_initial_pose
 
 
 def _launch_file(package, filename):
     return PathJoinSubstitution(
         [get_package_share_directory(package), "launch", filename]
     )
+
+
+def _core_race(
+    context, *, localization_map_path, course_path, vehicle_info, config
+):
+    initial_pose = list(load_course_initial_pose(course_path.perform(context)))
+    return [
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                _launch_file("autoracer_bringup", "race.launch.py")
+            ),
+            launch_arguments={
+                "localization_map_path": localization_map_path,
+                "course_path": course_path,
+                "use_sim_time": "false",
+                "system_run_mode": "online",
+                "gnss_enabled": "false",
+                "initial_pose": str(initial_pose),
+                "vehicle_info_param_file": vehicle_info,
+                "gate_param_file": PathJoinSubstitution(
+                    [config, "vehicle_cmd_gate.param.yaml"]
+                ),
+                "runtime_param_file": PathJoinSubstitution(
+                    [config, "race_runtime.param.yaml"]
+                ),
+                "max_speed_mps": "0.5",
+                "max_accel_mps2": "0.4",
+                "max_decel_mps2": "-0.8",
+                "command_latency_sec": "0.1",
+                "stopping_margin_m": "1.0",
+            }.items(),
+        )
+    ]
 
 
 def generate_launch_description():
@@ -32,6 +73,7 @@ def generate_launch_description():
     imu_device = LaunchConfiguration("imu_device")
     launch_lidar = LaunchConfiguration("launch_lidar")
     launch_imu = LaunchConfiguration("launch_imu")
+    launch_rviz = LaunchConfiguration("launch_rviz")
     enable_drive_commands = LaunchConfiguration("enable_drive_commands")
     config = PathJoinSubstitution(
         [get_package_share_directory("autoracer_rc_bringup"), "config", "rc"]
@@ -52,7 +94,10 @@ def generate_launch_description():
             DeclareLaunchArgument("imu_device"),
             DeclareLaunchArgument("launch_lidar", default_value="true"),
             DeclareLaunchArgument("launch_imu", default_value="true"),
-            DeclareLaunchArgument("enable_drive_commands", default_value="false"),
+            DeclareLaunchArgument("launch_rviz", default_value="true"),
+            DeclareLaunchArgument(
+                "enable_drive_commands", default_value="false"
+            ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     _launch_file("autoracer_rc_bringup", "sensing.launch.py")
@@ -72,28 +117,33 @@ def generate_launch_description():
                     "enable_drive_commands": enable_drive_commands,
                 }.items(),
             ),
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    _launch_file("autoracer_bringup", "race.launch.py")
-                ),
-                launch_arguments={
+            OpaqueFunction(
+                function=_core_race,
+                kwargs={
                     "localization_map_path": localization_map_path,
                     "course_path": course_path,
-                    "use_sim_time": "false",
-                    "system_run_mode": "online",
-                    "vehicle_info_param_file": vehicle_info,
-                    "gate_param_file": PathJoinSubstitution(
-                        [config, "vehicle_cmd_gate.param.yaml"]
+                    "vehicle_info": vehicle_info,
+                    "config": config,
+                },
+            ),
+            Node(
+                package="rviz2",
+                executable="rviz2",
+                name="rc_race_rviz",
+                arguments=[
+                    "-d",
+                    PathJoinSubstitution(
+                        [
+                            get_package_share_directory(
+                                "autoracer_rc_bringup"
+                            ),
+                            "rviz",
+                            "rc_race.rviz",
+                        ]
                     ),
-                    "runtime_param_file": PathJoinSubstitution(
-                        [config, "race_runtime.param.yaml"]
-                    ),
-                    "max_speed_mps": "0.5",
-                    "max_accel_mps2": "0.4",
-                    "max_decel_mps2": "-0.8",
-                    "command_latency_sec": "0.1",
-                    "stopping_margin_m": "1.0",
-                }.items(),
+                ],
+                output="screen",
+                condition=IfCondition(launch_rviz),
             ),
         ]
     )

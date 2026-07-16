@@ -74,4 +74,5 @@ exec ros2 launch autoracer_rc_bringup race.launch.py \
   imu_device:="${RC_IMU_DEVICE}" \
   launch_lidar:="${RC_LAUNCH_LIDAR:-true}" \
   launch_imu:="${RC_LAUNCH_IMU:-true}" \
+  launch_rviz:="${RC_LAUNCH_RVIZ:-true}" \
   enable_drive_commands:=false

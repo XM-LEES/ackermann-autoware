@@ -50,12 +50,31 @@ def test_rc_race_injects_only_platform_owned_files_and_conservative_dynamics():
         '"vehicle_info_param_file"',
         '"gate_param_file"',
         '"runtime_param_file"',
+        '"gnss_enabled": "false"',
+        '"initial_pose"',
     ):
         assert argument in race
     assert '"control_param_file"' not in race
     assert "controller.param.yaml" not in race
     assert 'DeclareLaunchArgument("localization_map_path")' in race
     assert 'DeclareLaunchArgument("course_path")' in race
+
+
+def test_rc_race_opens_a_live_visualization_by_default():
+    race = source("race.launch.py")
+    rviz = (PACKAGE / "rviz/rc_race.rviz").read_text(encoding="utf-8")
+
+    assert 'DeclareLaunchArgument("launch_rviz", default_value="true")' in race
+    assert 'package="rviz2"' in race
+    assert 'executable="rviz2"' in race
+    for topic in (
+        "/map/pointcloud_map",
+        "/sensing/lidar/concatenated/pointcloud",
+        "/localization/kinematic_state",
+        "/planning/global_trajectory",
+        "/planning/trajectory",
+    ):
+        assert topic in rviz
 
 
 def test_vehicle_launch_owns_only_the_uart_adapter():

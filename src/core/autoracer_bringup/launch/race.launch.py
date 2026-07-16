@@ -25,6 +25,8 @@ def generate_launch_description():
     control_param_file = LaunchConfiguration("control_param_file")
     gate_param_file = LaunchConfiguration("gate_param_file")
     runtime_param_file = LaunchConfiguration("runtime_param_file")
+    gnss_enabled = LaunchConfiguration("gnss_enabled")
+    initial_pose = LaunchConfiguration("initial_pose")
 
     return LaunchDescription(
         [
@@ -41,6 +43,8 @@ def generate_launch_description():
             DeclareLaunchArgument("max_decel_mps2", default_value="-1.5"),
             DeclareLaunchArgument("command_latency_sec", default_value="0.2"),
             DeclareLaunchArgument("stopping_margin_m", default_value="5.0"),
+            DeclareLaunchArgument("gnss_enabled", default_value="true"),
+            DeclareLaunchArgument("initial_pose", default_value="[]"),
             DeclareLaunchArgument("vehicle_info_param_file"),
             DeclareLaunchArgument(
                 "control_param_file",
@@ -88,6 +92,8 @@ def generate_launch_description():
                     "max_decel_mps2": max_decel_mps2,
                     "command_latency_sec": command_latency_sec,
                     "stopping_margin_m": stopping_margin_m,
+                    "gnss_enabled": gnss_enabled,
+                    "initial_pose": initial_pose,
                 }.items(),
             ),
             IncludeLaunchDescription(

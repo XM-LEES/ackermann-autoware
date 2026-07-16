@@ -3,7 +3,7 @@ project(autoracer_rc_bringup)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY config launch DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY config launch rviz DESTINATION share/${PROJECT_NAME})
 install(PROGRAMS scripts/start_rc_race.sh DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

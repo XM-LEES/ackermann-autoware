@@ -21,6 +21,8 @@ def generate_launch_description():
     max_decel_mps2 = LaunchConfiguration("max_decel_mps2")
     command_latency_sec = LaunchConfiguration("command_latency_sec")
     stopping_margin_m = LaunchConfiguration("stopping_margin_m")
+    gnss_enabled = LaunchConfiguration("gnss_enabled")
+    initial_pose = LaunchConfiguration("initial_pose")
 
     return LaunchDescription(
         [
@@ -37,14 +39,20 @@ def generate_launch_description():
             DeclareLaunchArgument("max_decel_mps2", default_value="-1.5"),
             DeclareLaunchArgument("command_latency_sec", default_value="0.2"),
             DeclareLaunchArgument("stopping_margin_m", default_value="5.0"),
+            DeclareLaunchArgument("gnss_enabled", default_value="true"),
+            DeclareLaunchArgument("initial_pose", default_value="[]"),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    _launch_file("autoracer_localization", "localization.launch.py")
+                    _launch_file(
+                        "autoracer_localization", "localization.launch.py"
+                    )
                 ),
                 launch_arguments={
                     "localization_map_path": localization_map_path,
                     "use_sim_time": use_sim_time,
                     "system_run_mode": system_run_mode,
+                    "gnss_enabled": gnss_enabled,
+                    "initial_pose": initial_pose,
                 }.items(),
             ),
             IncludeLaunchDescription(

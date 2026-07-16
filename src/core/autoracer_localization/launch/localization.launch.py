@@ -37,6 +37,7 @@ def generate_launch_description():
     system_run_mode = LaunchConfiguration("system_run_mode")
     input_pointcloud = LaunchConfiguration("input_pointcloud")
     initial_pose = LaunchConfiguration("initial_pose")
+    gnss_enabled = LaunchConfiguration("gnss_enabled")
     localization_pointcloud_container_name = LaunchConfiguration(
         "localization_pointcloud_container_name"
     )
@@ -179,6 +180,7 @@ def generate_launch_description():
                 "pose_source": "ndt",
                 "twist_source": "gyro_odom",
                 "initial_pose": initial_pose,
+                "gnss_enabled": gnss_enabled,
                 "system_run_mode": system_run_mode,
                 "input_pointcloud": input_pointcloud,
                 "localization_pointcloud_container_name": (
@@ -264,6 +266,7 @@ def generate_launch_description():
                 default_value="/pointcloud_container",
             ),
             DeclareLaunchArgument("initial_pose", default_value="[]"),
+            DeclareLaunchArgument("gnss_enabled", default_value="true"),
             GroupAction(runtime_actions),
         ]
     )

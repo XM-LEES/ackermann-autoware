@@ -93,6 +93,9 @@ def test_shared_race_exposes_platform_parameter_contract():
         / "launch"
         / "fixed_course_planning.launch.py"
     ).read_text(encoding="utf-8")
+    localization_source = (
+        CORE_ROOT / "autoracer_localization" / "launch" / "localization.launch.py"
+    ).read_text(encoding="utf-8")
 
     for argument in (
         "vehicle_info_param_file",
@@ -104,6 +107,8 @@ def test_shared_race_exposes_platform_parameter_contract():
         "max_decel_mps2",
         "command_latency_sec",
         "stopping_margin_m",
+        "gnss_enabled",
+        "initial_pose",
     ):
         assert f'LaunchConfiguration("{argument}")' in race_source
 
@@ -115,3 +120,7 @@ def test_shared_race_exposes_platform_parameter_contract():
     ):
         assert f'LaunchConfiguration("{argument}")' in planning_source
         assert f'LaunchConfiguration("{argument}")' in planner_source
+
+    for argument in ("gnss_enabled", "initial_pose"):
+        assert f'LaunchConfiguration("{argument}")' in planning_source
+        assert f'LaunchConfiguration("{argument}")' in localization_source

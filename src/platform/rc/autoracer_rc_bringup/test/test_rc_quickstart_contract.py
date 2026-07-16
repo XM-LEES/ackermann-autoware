@@ -26,6 +26,7 @@ def test_quickstart_is_owned_by_the_rc_platform_and_fail_closed():
 
     assert "autoracer_rc_bringup race.launch.py" in source
     assert 'enable_drive_commands:=false' in source
+    assert 'launch_rviz:="${RC_LAUNCH_RVIZ:-true}"' in source
     for required in (
         "RC_REPO_ROOT",
         "RC_VENDOR_WS",
@@ -106,6 +107,7 @@ def test_quickstart_launches_only_after_explicit_assets_and_devices_exist(tmp_pa
     assert f"serial_port:={serial}" in result.stdout
     assert f"imu_device:={imu}" in result.stdout
     assert "enable_drive_commands:=false" in result.stdout
+    assert "launch_rviz:=true" in result.stdout
 
 
 def test_quickstart_rejects_an_unprepared_repository(tmp_path):
