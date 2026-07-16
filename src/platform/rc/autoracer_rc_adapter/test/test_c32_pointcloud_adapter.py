@@ -15,10 +15,14 @@
 import struct
 
 import pytest
+from rclpy.qos import ReliabilityPolicy
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
 
-from autoracer_rc_adapter.c32_pointcloud_adapter import c32_to_point_xyzirc
+from autoracer_rc_adapter.c32_pointcloud_adapter import (
+    OUTPUT_QOS,
+    c32_to_point_xyzirc,
+)
 
 
 def field(name, offset, datatype):
@@ -63,6 +67,10 @@ def test_output_has_exact_xyzirc_layout():
     assert struct.unpack("<fffBBH", bytes(output.data)) == pytest.approx(
         (1.0, 2.0, 3.0, 42, 1, 7)
     )
+
+
+def test_output_qos_satisfies_reliable_autoware_preprocessor_subscribers():
+    assert OUTPUT_QOS.reliability == ReliabilityPolicy.RELIABLE
 
 
 def test_preserves_header_stamp_and_organized_shape():

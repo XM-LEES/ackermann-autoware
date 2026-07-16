@@ -4,6 +4,7 @@ race_runtime_manager:
     auto_start: false
     startup_timeout_sec: 90.0
     localization_timeout_sec: 0.20
+    pose_estimator_timeout_sec: 0.35
     trajectory_timeout_sec: 0.35
     control_timeout_sec: 0.20
     vehicle_status_timeout_sec: 0.25

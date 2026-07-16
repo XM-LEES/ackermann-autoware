@@ -15,6 +15,12 @@
 """Normalize LeiShen C32 PointCloud2 messages to Autoware PointXYZIRC."""
 
 import numpy as np
+from rclpy.qos import (
+    DurabilityPolicy,
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+)
 from sensor_msgs.msg import PointCloud2, PointField
 
 
@@ -32,6 +38,13 @@ _SOURCE_TYPES = {
     PointField.UINT16: "<u2",
     PointField.FLOAT32: "<f4",
 }
+
+OUTPUT_QOS = QoSProfile(
+    history=HistoryPolicy.KEEP_LAST,
+    depth=5,
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.VOLATILE,
+)
 
 
 def _source_dtype(message):
@@ -132,7 +145,7 @@ def main(args=None):
             self._publisher = self.create_publisher(
                 PointCloud2,
                 "output",
-                qos_profile_sensor_data,
+                OUTPUT_QOS,
             )
             self.create_subscription(
                 PointCloud2,

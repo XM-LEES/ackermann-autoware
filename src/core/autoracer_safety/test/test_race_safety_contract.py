@@ -10,7 +10,11 @@ PACKAGE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE))
 
 from autoracer_safety.race_contract import TimedInput
-from autoracer_safety.race_runtime_manager import RuntimePhase, desired_gear_command
+from autoracer_safety.race_runtime_manager import (
+    RuntimePhase,
+    desired_gear_command,
+    localization_readiness_failure,
+)
 
 from autoware_vehicle_msgs.msg import GearCommand
 
@@ -76,6 +80,25 @@ def test_stopping_keeps_drive_while_moving_and_selects_park_at_rest():
     assert desired_gear_command(RuntimePhase.FAULT, 5.0, 0.10) == GearCommand.DRIVE
     assert desired_gear_command(RuntimePhase.FAULT, 0.0, 0.10) == GearCommand.PARK
     assert desired_gear_command(RuntimePhase.FINISHED, 0.0, 0.10) == GearCommand.PARK
+
+
+def test_runtime_readiness_requires_fresh_ndt_pose_not_only_ekf_odometry():
+    assert (
+        localization_readiness_failure(
+            initialized=True,
+            odometry_fresh=True,
+            pose_estimator_fresh=False,
+        )
+        == "POSE_ESTIMATOR_STALE"
+    )
+    assert (
+        localization_readiness_failure(
+            initialized=True,
+            odometry_fresh=True,
+            pose_estimator_fresh=True,
+        )
+        is None
+    )
 
 
 def test_runtime_manager_is_single_state_and_mrm_owner():

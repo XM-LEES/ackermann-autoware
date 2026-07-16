@@ -21,6 +21,7 @@ from autoware_vehicle_msgs.msg import (
     VelocityReport,
 )
 from autoware_vehicle_msgs.srv import ControlModeCommand
+from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.executors import ExternalShutdownException
@@ -43,6 +44,18 @@ class RuntimePhase(IntEnum):
     FAULT = 6
 
 
+def localization_readiness_failure(
+    *, initialized: bool, odometry_fresh: bool, pose_estimator_fresh: bool
+) -> str | None:
+    if not initialized:
+        return "LOCALIZATION_NOT_INITIALIZED"
+    if not odometry_fresh:
+        return "LOCALIZATION_STALE"
+    if not pose_estimator_fresh:
+        return "POSE_ESTIMATOR_STALE"
+    return None
+
+
 def desired_gear_command(
     phase: RuntimePhase, speed_mps: float, stop_speed_mps: float
 ) -> int:
@@ -60,6 +73,7 @@ class RaceRuntimeManager(Node):
             "auto_start": True,
             "startup_timeout_sec": 90.0,
             "localization_timeout_sec": 0.20,
+            "pose_estimator_timeout_sec": 0.35,
             "trajectory_timeout_sec": 0.35,
             "control_timeout_sec": 0.20,
             "vehicle_status_timeout_sec": 0.25,
@@ -84,6 +98,7 @@ class RaceRuntimeManager(Node):
 
         self._localization_state = TimedInput()
         self._odometry = TimedInput()
+        self._ndt_pose = TimedInput()
         self._trajectory = TimedInput()
         self._route_state = TimedInput()
         self._raw_control = TimedInput()
@@ -96,6 +111,7 @@ class RaceRuntimeManager(Node):
         self._timed_inputs = (
             self._localization_state,
             self._odometry,
+            self._ndt_pose,
             self._trajectory,
             self._route_state,
             self._raw_control,
@@ -119,6 +135,14 @@ class RaceRuntimeManager(Node):
             Odometry,
             "/localization/kinematic_state",
             lambda message: self._odometry.update(
+                message, self._now(), message.header.stamp
+            ),
+            COMMAND_QOS,
+        )
+        self.create_subscription(
+            PoseStamped,
+            "/localization/pose_estimator/pose",
+            lambda message: self._ndt_pose.update(
                 message, self._now(), message.header.stamp
             ),
             COMMAND_QOS,
@@ -324,13 +348,19 @@ class RaceRuntimeManager(Node):
         return float(self._velocity.message.longitudinal_velocity)
 
     def _base_failure(self) -> str | None:
-        if self._localization_state.message is None or (
-            self._localization_state.message.state
-            != LocalizationInitializationState.INITIALIZED
-        ):
-            return "LOCALIZATION_NOT_INITIALIZED"
-        if not self._fresh(self._odometry, "localization_timeout_sec"):
-            return "LOCALIZATION_STALE"
+        localization_failure = localization_readiness_failure(
+            initialized=(
+                self._localization_state.message is not None
+                and self._localization_state.message.state
+                == LocalizationInitializationState.INITIALIZED
+            ),
+            odometry_fresh=self._fresh(self._odometry, "localization_timeout_sec"),
+            pose_estimator_fresh=self._fresh(
+                self._ndt_pose, "pose_estimator_timeout_sec"
+            ),
+        )
+        if localization_failure is not None:
+            return localization_failure
         if not self._fresh(self._trajectory, "trajectory_timeout_sec"):
             return "TRAJECTORY_STALE"
         if self._trajectory.message is None or len(self._trajectory.message.points) < 2:
@@ -608,6 +638,9 @@ class RaceRuntimeManager(Node):
                 else False,
                 "raw_control_fresh": self._fresh(
                     self._raw_control, "control_timeout_sec"
+                ),
+                "pose_estimator_fresh": self._fresh(
+                    self._ndt_pose, "pose_estimator_timeout_sec"
                 ),
                 "final_control_fresh": self._fresh(
                     self._final_control, "control_timeout_sec"
